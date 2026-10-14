@@ -1,0 +1,14 @@
+# Never send secrets, data or local artefacts into the image build context
+.env
+.env.*
+!.env.example
+!.env.production.example
+backups/
+uploads/
+storage/
+node_modules/
+dist/
+coverage/
+server.log
+*.dump
+.git

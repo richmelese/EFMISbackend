@@ -1,0 +1,95 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: efmis-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: efmis
+      POSTGRES_PASSWORD: efmis_dev_password
+      POSTGRES_DB: efmis
+    ports:
+      - "55432:5432"
+    volumes:
+      - efmis_pgdata:/var/lib/postgresql/data
+      - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+      - ./docker/init-traccar-db.sql:/docker-entrypoint-initdb.d/init-traccar-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U efmis -d efmis"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: efmis-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "56379:6379"
+    volumes:
+      - efmis_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # GPS Tracking Platform (Traccar): Teltonika trackers → Traccar → NestJS webhook (Logistics doc §2, §8).
+  # Configured only through environment variables; the webhook secret comes from .env and is never written to a file.
+  traccar:
+    image: traccar/traccar:6.6
+    container_name: efmis-traccar
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      CONFIG_USE_ENVIRONMENT_VARIABLES: "true"
+      DATABASE_DRIVER: org.postgresql.Driver
+      DATABASE_URL: jdbc:postgresql://postgres:5432/traccar
+      DATABASE_USER: efmis
+      DATABASE_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      # Push every decoded position / event to EFMIS (retried by Traccar when EFMIS is briefly unavailable).
+      FORWARD_ENABLE: "true"
+      FORWARD_TYPE: json
+      FORWARD_URL: ${TRACCAR_FORWARD_TARGET:-http://host.docker.internal:4000}/api/v1/integrations/traccar/positions
+      FORWARD_HEADER: "X-Traccar-Secret: ${TRACCAR_WEBHOOK_SECRET:?TRACCAR_WEBHOOK_SECRET must be set in .env}"
+      FORWARD_RETRY_ENABLE: "true"
+      EVENT_FORWARD_URL: ${TRACCAR_FORWARD_TARGET:-http://host.docker.internal:4000}/api/v1/integrations/traccar/events
+      EVENT_FORWARD_HEADER: "X-Traccar-Secret: ${TRACCAR_WEBHOOK_SECRET}"
+      # Only the protocols in use: Teltonika (devices) and OsmAnd (phone app / field diagnostics).
+      PROTOCOLS_ENABLE: teltonika,osmand
+      # Mark a device offline after 10 minutes without data (matches logisticsThresholds.gpsStaleMinutes).
+      STATUS_TIMEOUT: "600"
+      WEB_PORT: "8082"
+    ports:
+      - "8082:8082"        # Traccar web UI + REST API (keep private in production)
+      - "5027:5027"        # Teltonika TCP
+      - "5027:5027/udp"    # Teltonika UDP
+      - "5055:5055"        # OsmAnd HTTP
+    volumes:
+      - efmis_traccar_logs:/opt/traccar/logs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  api:
+    build: .
+    container_name: efmis-api
+    profiles: ["full"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "4000:4000"
+
+volumes:
+  efmis_pgdata:
+  efmis_redisdata:
+  efmis_traccar_logs:
