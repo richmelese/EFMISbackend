@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, ILike, Repository } from 'typeorm';
+import { EntityManager, ILike, In, Repository } from 'typeorm';
 import { Comment } from './entities/comment.entity';
 import { User } from '../users/entities/user.entity';
 import { AuthUser } from '../../common/types/auth-user';
@@ -27,6 +27,19 @@ export class CommentsService {
   async list(scopeType: string, scopeId: string) {
     const rows = await this.repo.find({ where: { scopeType, scopeId }, order: { id: 'ASC' } });
     return rows.map(r => this.toFrontend(r));
+  }
+
+  /** Same as `list`, batched for many scope ids in one query (avoids N+1 when listing many threads' comments). */
+  async listByScopes(scopeType: string, scopeIds: string[]): Promise<Map<string, ReturnType<CommentsService['toFrontend']>[]>> {
+    const map = new Map<string, ReturnType<CommentsService['toFrontend']>[]>();
+    if (!scopeIds.length) return map;
+    const rows = await this.repo.find({ where: { scopeType, scopeId: In(scopeIds) }, order: { id: 'ASC' } });
+    for (const r of rows) {
+      const bucket = map.get(r.scopeId);
+      if (bucket) bucket.push(this.toFrontend(r));
+      else map.set(r.scopeId, [this.toFrontend(r)]);
+    }
+    return map;
   }
 
   async add(user: AuthUser | { id: string | null; name: string }, scopeType: string, scopeId: string, text: string, parentId?: number | null, manager?: EntityManager) {

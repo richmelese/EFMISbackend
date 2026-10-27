@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource, EntityManager } from 'typeorm';
+import { DataSource, EntityManager, MoreThan } from 'typeorm';
 import { AuditLog } from './entities/audit-log.entity';
 import { nowStamp, sha256 } from '../../common/utils/helpers';
 import { RequestContext } from '../../common/types/auth-user';
@@ -83,15 +83,24 @@ export class AuditService {
     return rows.map(r => this.toFrontend(r));
   }
 
-  /** Walk the chain; report the first broken link. */
+  /** Walk the chain in bounded batches (the log is append-only and unbounded, so never load it all at once); report the first broken link. */
   async verifyChain() {
-    const rows = await this.ds.getRepository(AuditLog).find({ order: { seq: 'ASC' } });
+    const BATCH = 5_000;
+    const repo = this.ds.getRepository(AuditLog);
+    const entries = await repo.count();
     let prev = GENESIS;
-    for (const r of rows) {
-      if (r.prevHash !== prev) return { valid: false, entries: rows.length, brokenAt: r.id, reason: 'prev_hash mismatch' };
-      if ('sha256:' + sha256(this.canonical(r)) !== r.hash) return { valid: false, entries: rows.length, brokenAt: r.id, reason: 'hash mismatch (entry altered)' };
-      prev = r.hash;
+    let lastSeq = 0;
+    for (;;) {
+      const batch = await repo.find({ where: { seq: MoreThan(lastSeq) }, order: { seq: 'ASC' }, take: BATCH });
+      if (!batch.length) break;
+      for (const r of batch) {
+        if (r.prevHash !== prev) return { valid: false, entries, brokenAt: r.id, reason: 'prev_hash mismatch' };
+        if ('sha256:' + sha256(this.canonical(r)) !== r.hash) return { valid: false, entries, brokenAt: r.id, reason: 'hash mismatch (entry altered)' };
+        prev = r.hash;
+      }
+      lastSeq = batch[batch.length - 1].seq;
+      if (batch.length < BATCH) break;
     }
-    return { valid: true, entries: rows.length, headHash: prev };
+    return { valid: true, entries, headHash: prev };
   }
 }

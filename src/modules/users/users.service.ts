@@ -5,8 +5,8 @@ import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { User } from './entities/user.entity';
 import { RoleEntity } from './entities/role.entity';
-import { AuthUser, RequestContext } from '../../common/types/auth-user';
-import { Role } from '../../common/constants/permissions';
+import { AdministrativeScope, AuthUser, RequestContext } from '../../common/types/auth-user';
+import { Permission, Role } from '../../common/constants/permissions';
 import { Errors } from '../../common/utils/errors';
 import { shortId, stamp } from '../../common/utils/helpers';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
@@ -21,7 +21,7 @@ const SCOPE_REQUIRED: Record<string, 'kebeleId' | 'woredaId' | 'zoneId' | 'regio
   [Role.WAREHOUSE_OPERATOR]: 'warehouseId'
 };
 
-type Scope = { regionId: string | null; zoneId: string | null; woredaId: string | null; kebeleId: string | null; warehouseId: string | null };
+type Scope = Required<AdministrativeScope>;
 
 /** A readable temporary password that satisfies PASSWORD_RULE. */
 const UNAMBIGUOUS = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no 0/O, 1/l/I
@@ -56,7 +56,8 @@ export class UsersService {
   /** Full principal: base role for data scope, assigned role + its permissions from the database. */
   async authUserFor(u: User): Promise<AuthUser> {
     const r = await this.rbac.resolve(u.role);
-    return { ...this.toAuthUser(u), role: r.baseRole, roleId: u.role, roleName: r.roleName, permissions: r.permissions };
+    // r.permissions are role_permissions.permission_key values, kept in sync with the Permission catalogue by RbacService.syncCatalog().
+    return { ...this.toAuthUser(u), role: r.baseRole, roleId: u.role, roleName: r.roleName, permissions: r.permissions as Permission[] };
   }
 
   /**

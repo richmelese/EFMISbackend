@@ -178,9 +178,9 @@ export class QuotaRunsService {
   }
 
   // ---------------- Adjustment requests (REQ-1.4-002) ----------------
-  async requestToFrontend(r: QuotaAdjustmentRequest, regionNames?: Record<string, string>) {
+  async requestToFrontend(r: QuotaAdjustmentRequest, regionNames?: Record<string, string>, preloadedComments?: Awaited<ReturnType<CommentsService['list']>>) {
     const regionName = regionNames ? regionNames[r.regionId] : (await this.regions.findOneBy({ id: r.regionId }))?.name;
-    const comments = await this.comments.list('QUOTA_REQUEST', r.id);
+    const comments = preloadedComments ?? (await this.comments.list('QUOTA_REQUEST', r.id));
     return {
       id: r.id, regionId: r.regionId, regionName,
       direction: r.direction, amountMT: r.amountMt, justificationType: r.justificationType, justification: r.justification,
@@ -208,9 +208,8 @@ export class QuotaRunsService {
   async listRequests(user: AuthUser) {
     const rows = await this.requests.find({ where: isNational(user) ? {} : { regionId: user.regionId ?? '' }, order: { createdAt: 'DESC' } });
     const names = await this.regionNames();
-    const out: any[] = [];
-    for (const r of rows) out.push(await this.requestToFrontend(r, names));
-    return out;
+    const commentsByRequest = await this.comments.listByScopes('QUOTA_REQUEST', rows.map(r => r.id));
+    return Promise.all(rows.map(r => this.requestToFrontend(r, names, commentsByRequest.get(r.id) ?? [])));
   }
 
   async requestStats() {
