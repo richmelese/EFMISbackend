@@ -1,8 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
-  IsBoolean, IsDateString, IsIn, IsInt, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Matches, Max, MaxLength, Min
+  IsBoolean, IsDateString, IsIn, IsNotEmpty, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Matches, MaxLength, Min
 } from 'class-validator';
+import { PageQueryDto } from '../../../../common/dto/pagination.dto';
 
 /** Robust boolean parsing for JSON bodies, query strings and multipart fields ("false" must stay false). */
 export const ToBool = () =>
@@ -16,7 +17,7 @@ export const ToBool = () =>
 export const SHIPMENT_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'];
 export const DELIVERY_CONDITIONS = ['GOOD', 'DAMAGED', 'PARTIAL_DAMAGE', 'WET', 'SHORT'];
 
-export class ListShipmentsQueryDto {
+export class ListShipmentsQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ description: 'Status or comma-separated statuses', example: 'IN_TRANSIT,ARRIVED' })
   @IsOptional() @IsString() status?: string;
 
@@ -34,9 +35,6 @@ export class ListShipmentsQueryDto {
 
   @ApiPropertyOptional({ description: 'plannedPickupAt ≤ to (ISO date/time)' })
   @IsOptional() @IsDateString() to?: string;
-
-  @ApiPropertyOptional({ default: 1 }) @IsOptional() @IsInt() @Min(1) page?: number;
-  @ApiPropertyOptional({ default: 50, maximum: 200 }) @IsOptional() @IsInt() @Min(1) @Max(200) pageSize?: number;
 }
 
 export class CreateShipmentDto {

@@ -4,6 +4,7 @@ import {
   ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, Max, Min, MinLength, ValidateNested
 } from 'class-validator';
 import { RULES } from '../../../common/constants/rules';
+import { PageQueryDto } from '../../../common/dto/pagination.dto';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 const emptyToUndefined = ({ value }: { value: unknown }) => {
@@ -77,7 +78,7 @@ export class DeleteFarmerDto {
   @ApiProperty({ example: 'Duplicate entry captured twice' }) @IsString() @MinLength(3) reason: string;
 }
 
-export class ListFarmersQueryDto {
+export class ListFarmersQueryDto extends PageQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsString() q?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() kebeleId?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() woredaId?: string;
@@ -88,8 +89,6 @@ export class ListFarmersQueryDto {
   @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() minRequestedQtl?: number;
   @ApiPropertyOptional({ enum: ['name', 'date', 'farmSize', 'id'] }) @IsOptional() @IsString() sort?: string;
   @ApiPropertyOptional({ enum: ['asc', 'desc'] }) @IsOptional() @IsString() order?: string;
-  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() page?: number;
-  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() pageSize?: number;
 }
 
 export class CheckDuplicateQueryDto {

@@ -4,6 +4,7 @@ import {
   IsBoolean, IsIn, IsInt, IsISO8601, IsLatitude, IsLongitude, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Length, Matches, MaxLength, Min,
   MinLength, NotEquals, ValidateIf
 } from 'class-validator';
+import { PageQueryDto } from '../../../../common/dto/pagination.dto';
 
 export const WAREHOUSE_KINDS = ['CENTRAL_HUB', 'REGIONAL_DEPOT', 'UNION_STORE', 'PC_STORE', 'PORT'] as const;
 export const WAREHOUSE_STATUSES = ['ACTIVE', 'INACTIVE', 'MAINTENANCE'] as const;
@@ -44,13 +45,11 @@ export class UpdateWarehouseDto {
   @ApiPropertyOptional({ description: 'Reason recorded in the audit trail' }) @IsOptional() @IsString() @MaxLength(500) reason?: string;
 }
 
-export class WarehouseQueryDto {
+export class WarehouseQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ enum: WAREHOUSE_KINDS }) @IsOptional() @IsIn(WAREHOUSE_KINDS as unknown as string[]) kind?: string;
   @ApiPropertyOptional({ enum: WAREHOUSE_STATUSES }) @IsOptional() @IsIn(WAREHOUSE_STATUSES as unknown as string[]) status?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() regionId?: string;
   @ApiPropertyOptional({ description: 'Search code / name' }) @IsOptional() @IsString() q?: string;
-  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) page?: number;
-  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) pageSize?: number;
 }
 
 export class CreateProductDto {
@@ -61,10 +60,8 @@ export class CreateProductDto {
   @ApiPropertyOptional({ default: true }) @IsOptional() @IsBoolean() active?: boolean;
 }
 
-export class ProductQueryDto {
+export class ProductQueryDto extends PageQueryDto {
   @ApiPropertyOptional() @IsOptional() @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value)) @IsBoolean() active?: boolean;
-  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) page?: number;
-  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) pageSize?: number;
 }
 
 /**
@@ -105,7 +102,7 @@ export class LotQcDto {
   @ApiPropertyOptional() @ValidateIf(o => o.status === 'HELD' || o.status === 'REJECTED' || o.notes !== undefined) @IsString() @MinLength(3) @MaxLength(2000) notes?: string;
 }
 
-export class InventoryTxQueryDto {
+export class InventoryTxQueryDto extends PageQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsUUID() warehouseId?: string;
   @ApiPropertyOptional() @IsOptional() @IsUUID() productId?: string;
   @ApiPropertyOptional({ enum: LEDGER_TYPES, description: 'One type or a comma-separated list' }) @IsOptional() @IsString() type?: string;
@@ -113,14 +110,10 @@ export class InventoryTxQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsString() referenceId?: string;
   @ApiPropertyOptional({ description: 'ISO 8601' }) @IsOptional() @IsISO8601() from?: string;
   @ApiPropertyOptional({ description: 'ISO 8601' }) @IsOptional() @IsISO8601() to?: string;
-  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) page?: number;
-  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) pageSize?: number;
 }
 
-export class DiscrepancyQueryDto {
+export class DiscrepancyQueryDto extends PageQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsUUID() productId?: string;
   @ApiPropertyOptional({ description: 'ISO 8601' }) @IsOptional() @IsISO8601() from?: string;
   @ApiPropertyOptional({ description: 'ISO 8601' }) @IsOptional() @IsISO8601() to?: string;
-  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) page?: number;
-  @ApiPropertyOptional() @IsOptional() @IsInt() @Min(1) pageSize?: number;
 }

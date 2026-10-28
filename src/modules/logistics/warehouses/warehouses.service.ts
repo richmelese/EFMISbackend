@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { Brackets, DataSource, EntityManager, In, QueryFailedError, Repository } from 'typeorm';
+import { DataSource, EntityManager, In, QueryFailedError, Repository } from 'typeorm';
 import { FLEET_WIDE_ROLES, Role } from '../../../common/constants/permissions';
 import { RULES } from '../../../common/constants/rules';
 import { AuthUser, RequestContext } from '../../../common/types/auth-user';
 import { Errors } from '../../../common/utils/errors';
 import { isValidCoordinate } from '../../../common/utils/geo';
 import { round } from '../../../common/utils/helpers';
+import { applySearch } from '../../../common/utils/query-filters';
 import { AuditService } from '../../audit/audit.service';
 import { Paged, pageParams } from '../logistics.constants';
 import {
@@ -95,7 +96,7 @@ export class WarehousesService {
     if (q.kind) qb.andWhere('w.kind = :kind', { kind: q.kind });
     if (q.status) qb.andWhere('w.status = :status', { status: q.status });
     if (q.regionId) qb.andWhere('w.regionId = :regionId', { regionId: q.regionId });
-    if (q.q) qb.andWhere(new Brackets(b => b.where('w.code ILIKE :q', { q: `%${q.q}%` }).orWhere('w.name ILIKE :q', { q: `%${q.q}%` })));
+    applySearch(qb, ['w.code', 'w.name'], q.q);
     const [rows, total] = await qb.orderBy('w.sort', 'ASC').addOrderBy('w.name', 'ASC').skip(skip).take(take).getManyAndCount();
     const sums = await this.sumsFor(rows.map(r => r.id));
     return { items: rows.map(w => this.warehouseOut(w, sums.get(w.id)?.onHand ?? 0, sums.get(w.id)?.reserved ?? 0)), total, page, pageSize };

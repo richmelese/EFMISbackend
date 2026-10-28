@@ -1,19 +1,17 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { IsBoolean, IsEmail, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsIn, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
+import { PageQueryDto } from '../../../common/dto/pagination.dto';
 
 /** At least 10 characters with upper case, lower case and a digit. */
 export const PASSWORD_RULE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{10,128}$/;
 export const PASSWORD_MESSAGE = 'password must be 10–128 characters and contain upper case, lower case and a digit';
 const PHONE_RULE = /^0[79]\d{8}$/;
 
-export class ListUsersQueryDto {
+export class ListUsersQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ description: 'Search name, email, phone, title' }) @IsOptional() @IsString() @MaxLength(100) q?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() role?: string;
   @ApiPropertyOptional({ enum: ['true', 'false'] }) @IsOptional() @IsIn(['true', 'false']) active?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() regionId?: string;
-  @ApiPropertyOptional({ default: 1 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
-  @ApiPropertyOptional({ default: 50, maximum: 200 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) pageSize?: number;
 }
 
 export class CreateUserDto {

@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize, IsArray, IsBoolean, IsDate, IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Length, Matches, Max, MaxLength, Min, MinLength
 } from 'class-validator';
+import { PageQueryDto, PageQueryDto1000 } from '../../../../common/dto/pagination.dto';
 
 export const OWNERSHIP_TYPES = ['ESLSE', 'EABC', 'PRIVATE_TRANSPORTER', 'UNION'] as const;
 export const CONNECTIVITY_FILTERS = ['ONLINE', 'STALE', 'OFFLINE', 'NEVER_SEEN', 'NO_DEVICE'] as const;
@@ -28,10 +29,8 @@ export class UpdateVehicleTypeDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() active?: boolean;
 }
 
-export class VehicleTypeListQuery {
+export class VehicleTypeListQuery extends PageQueryDto {
   @IsOptional() @IsString() active?: string;
-  @IsOptional() @IsString() page?: string;
-  @IsOptional() @IsString() pageSize?: string;
 }
 
 // ---------------- Trucks ----------------
@@ -62,14 +61,12 @@ export class TruckStatusDto {
   @ApiProperty() @IsString() @MinLength(3) @MaxLength(500) reason: string;
 }
 
-export class TruckListQuery {
+export class TruckListQuery extends PageQueryDto {
   @ApiPropertyOptional({ description: 'operationalStatus' }) @IsOptional() @IsIn(['ACTIVE', 'MAINTENANCE', 'OUT_OF_SERVICE']) status?: string;
   @ApiPropertyOptional({ description: 'availabilityStatus' }) @IsOptional() @IsIn(['AVAILABLE', 'RESERVED', 'ON_TRIP']) availability?: string;
   @ApiPropertyOptional({ enum: CONNECTIVITY_FILTERS }) @IsOptional() @IsIn(CONNECTIVITY_FILTERS) connectivity?: string;
   @ApiPropertyOptional() @IsOptional() @IsUUID() vehicleTypeId?: string;
   @ApiPropertyOptional({ description: 'search fleet code / plate number' }) @IsOptional() @IsString() @MaxLength(60) q?: string;
-  @IsOptional() @IsString() page?: string;
-  @IsOptional() @IsString() pageSize?: string;
 }
 
 export class TruckEligibleQuery {
@@ -79,12 +76,10 @@ export class TruckEligibleQuery {
   @ApiPropertyOptional({ description: 'Trip being (re)validated — its own booking is ignored' }) @IsOptional() @IsUUID() excludeTripId?: string;
 }
 
-export class LocationHistoryQuery {
+export class LocationHistoryQuery extends PageQueryDto1000 {
   @ApiPropertyOptional({ description: 'ISO 8601' }) @IsOptional() @Type(() => Date) @IsDate() from?: Date;
   @ApiPropertyOptional({ description: 'ISO 8601' }) @IsOptional() @Type(() => Date) @IsDate() to?: Date;
   @ApiPropertyOptional({ description: 'Opaque cursor returned as nextCursor (keyset pagination)' }) @IsOptional() @IsString() @MaxLength(200) cursor?: string;
-  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
-  @ApiPropertyOptional({ maximum: 1000, default: 200 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1000) pageSize?: number;
 }
 
 // ---------------- GPS devices ----------------
@@ -117,11 +112,9 @@ export class RetireDeviceDto {
   @ApiProperty() @IsString() @MinLength(3) @MaxLength(500) reason: string;
 }
 
-export class GpsDeviceListQuery {
+export class GpsDeviceListQuery extends PageQueryDto {
   @ApiPropertyOptional({ enum: DEVICE_STATUSES }) @IsOptional() @IsIn(DEVICE_STATUSES) status?: string;
   @ApiPropertyOptional({ enum: ['ONLINE', 'STALE', 'OFFLINE', 'NEVER_SEEN'] }) @IsOptional() @IsIn(['ONLINE', 'STALE', 'OFFLINE', 'NEVER_SEEN']) connectivity?: string;
   @ApiPropertyOptional({ description: 'true | false' }) @IsOptional() @IsIn(['true', 'false']) assigned?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(60) q?: string;
-  @IsOptional() @IsString() page?: string;
-  @IsOptional() @IsString() pageSize?: string;
 }

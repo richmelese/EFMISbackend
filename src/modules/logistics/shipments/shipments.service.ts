@@ -4,6 +4,7 @@ import { Brackets, DataSource, EntityManager, In, SelectQueryBuilder } from 'typ
 import { AuthUser, RequestContext } from '../../../common/types/auth-user';
 import { Errors } from '../../../common/utils/errors';
 import { ACTIVE_TRIP_STATES, SHIPMENT_TRANSITIONS, assertTransition } from '../../../common/utils/state-machine';
+import { applySearch } from '../../../common/utils/query-filters';
 import { AuditService } from '../../audit/audit.service';
 import { AuditLog } from '../../audit/entities/audit-log.entity';
 import { DriverTripAssignment } from '../drivers/entities/driver.entities';
@@ -210,9 +211,7 @@ export class ShipmentsService {
     }
     if (q.delayed !== undefined) qb.andWhere('s.isDelayed = :delayed', { delayed: q.delayed });
     if (q.warehouseId) qb.andWhere('(s.originWarehouseId = :wh OR s.destinationWarehouseId = :wh)', { wh: q.warehouseId });
-    if (q.q) {
-      qb.andWhere('(s.shipmentNumber ILIKE :q OR s.waybillNumber ILIKE :q OR s.customerName ILIKE :q OR s.cargoDescription ILIKE :q OR s.qrLot ILIKE :q)', { q: `%${q.q}%` });
-    }
+    applySearch(qb, ['s.shipmentNumber', 's.waybillNumber', 's.customerName', 's.cargoDescription', 's.qrLot'], q.q);
     if (q.from) qb.andWhere('s.plannedPickupAt >= :from', { from: new Date(q.from) });
     if (q.to) qb.andWhere('s.plannedPickupAt <= :to', { to: new Date(q.to) });
     const [rows, total] = await qb.orderBy('s.createdAt', 'DESC').skip(skip).take(take).getManyAndCount();

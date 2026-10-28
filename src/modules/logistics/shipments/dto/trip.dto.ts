@@ -1,21 +1,20 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsLatitude, IsLongitude, IsNotEmpty, IsNumber,
-  IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateNested
+  ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsDateString, IsIn, IsLatitude, IsLongitude, IsNotEmpty, IsNumber,
+  IsOptional, IsString, IsUUID, MaxLength, Min, ValidateNested
 } from 'class-validator';
 import { ToBool } from './shipment.dto';
+import { PageQueryDto } from '../../../../common/dto/pagination.dto';
 
 export const TRIP_EVENT_TYPES = ['INCIDENT', 'DELAY', 'STOP', 'COMMUNICATION', 'NOTE'];
 export const INCIDENT_SEVERITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 
-export class ListTripsQueryDto {
+export class ListTripsQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ description: 'Status or comma-separated statuses' }) @IsOptional() @IsString() status?: string;
   @ApiPropertyOptional() @IsOptional() @IsUUID() truckId?: string;
   @ApiPropertyOptional() @IsOptional() @IsUUID() driverId?: string;
   @ApiPropertyOptional({ description: 'Only trips in an active state' }) @IsOptional() @ToBool() @IsBoolean() active?: boolean;
-  @ApiPropertyOptional({ default: 1 }) @IsOptional() @IsInt() @Min(1) page?: number;
-  @ApiPropertyOptional({ default: 50, maximum: 200 }) @IsOptional() @IsInt() @Min(1) @Max(200) pageSize?: number;
 }
 
 export class CreateTripDto {

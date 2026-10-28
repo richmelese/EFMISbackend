@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import {
   IsIn, IsInt, IsISO8601, IsLatitude, IsLongitude, IsNumber, IsOptional, IsPositive, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength, ValidateIf
 } from 'class-validator';
+import { PageQueryDto } from '../../../../common/dto/pagination.dto';
 
 export const SCAN_TYPES = ['DISPATCH_ORIGIN', 'CHECKPOINT', 'HANDOVER', 'RECEIVE_DESTINATION'] as const;
 export const INCIDENT_TYPES = ['THEFT', 'DIVERSION', 'ROBBERY', 'TAMPERING', 'ACCIDENT', 'UNAUTHORIZED_STOP', 'OTHER'] as const;
@@ -24,7 +25,7 @@ export class CreateScanDto {
   @ApiPropertyOptional({ description: 'Device time of the scan (ISO 8601); default now' }) @IsOptional() @IsISO8601() scannedAt?: string;
 }
 
-export class ListIncidentsQueryDto {
+export class ListIncidentsQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ description: 'Status or comma-separated statuses' }) @IsOptional() @IsString() status?: string;
   @ApiPropertyOptional({ enum: INCIDENT_TYPES }) @IsOptional() @IsIn(INCIDENT_TYPES as unknown as string[]) incidentType?: string;
   @ApiPropertyOptional({ description: 'Severity or comma-separated severities' }) @IsOptional() @IsString() severity?: string;
@@ -32,8 +33,6 @@ export class ListIncidentsQueryDto {
   @ApiPropertyOptional() @IsOptional() @IsUUID() tripId?: string;
   @ApiPropertyOptional() @IsOptional() @IsISO8601() from?: string;
   @ApiPropertyOptional() @IsOptional() @IsISO8601() to?: string;
-  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
-  @ApiPropertyOptional({ maximum: 200 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) pageSize?: number;
 }
 
 export class CreateIncidentDto {

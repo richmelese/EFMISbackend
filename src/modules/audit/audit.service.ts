@@ -3,6 +3,7 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, EntityManager, MoreThan } from 'typeorm';
 import { AuditLog } from './entities/audit-log.entity';
 import { nowStamp, sha256 } from '../../common/utils/helpers';
+import { applySearch } from '../../common/utils/query-filters';
 import { RequestContext } from '../../common/types/auth-user';
 
 const GENESIS = 'sha256:' + '0'.repeat(64);
@@ -72,13 +73,13 @@ export class AuditService {
 
   async list(q: AuditQuery = {}) {
     const qb = this.ds.getRepository(AuditLog).createQueryBuilder('a');
-    if (q.user) qb.andWhere('a.userName ILIKE :user', { user: `%${q.user}%` });
+    applySearch(qb, ['a.userName'], q.user, 'userq');
     if (q.action) qb.andWhere('a.action = :action', { action: q.action });
     if (q.target) qb.andWhere('a.target = :target', { target: q.target });
     if (q.role) qb.andWhere('a.role = :role', { role: q.role });
     if (q.from) qb.andWhere('a.timestamp >= :from', { from: q.from });
     if (q.to) qb.andWhere('a.timestamp <= :to', { to: q.to });
-    if (q.q) qb.andWhere('(a.action ILIKE :q OR a.target ILIKE :q OR a.userName ILIKE :q)', { q: `%${q.q}%` });
+    applySearch(qb, ['a.action', 'a.target', 'a.userName'], q.q);
     const rows = await qb.orderBy('a.seq', 'DESC').take(Math.min(Number(q.limit) || 500, 5000)).getMany();
     return rows.map(r => this.toFrontend(r));
   }

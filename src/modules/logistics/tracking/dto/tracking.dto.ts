@@ -1,8 +1,9 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  ArrayMaxSize, ArrayMinSize, IsArray, IsDate, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, IsUUID, Length, Max, MaxLength, Min, ValidateNested
+  ArrayMaxSize, ArrayMinSize, IsArray, IsDate, IsIn, IsNumber, IsObject, IsOptional, IsString, IsUUID, Length, Max, MaxLength, Min, ValidateNested
 } from 'class-validator';
+import { PageQueryDto1000 } from '../../../../common/dto/pagination.dto';
 
 export class SimulatedPointDto {
   @ApiProperty({ example: 9.0108 }) @IsNumber() lat: number;
@@ -32,11 +33,9 @@ export class NormalizedPositionDto {
   @ApiPropertyOptional() @IsOptional() @IsObject() attributes?: Record<string, unknown>;
 }
 
-export class ActivePositionsQuery {
+export class ActivePositionsQuery extends PageQueryDto1000 {
   @ApiPropertyOptional({ enum: ['ONLINE', 'STALE', 'OFFLINE', 'NEVER_SEEN', 'NO_DEVICE'] }) @IsOptional() @IsIn(['ONLINE', 'STALE', 'OFFLINE', 'NEVER_SEEN', 'NO_DEVICE']) connectivity?: string;
   @ApiPropertyOptional({ description: 'true → only trucks with an active trip' }) @IsOptional() @IsIn(['true', 'false']) onTrip?: string;
   @ApiPropertyOptional({ description: 'true | false — filter by stale position' }) @IsOptional() @IsIn(['true', 'false']) stale?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(60) q?: string;
-  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
-  @ApiPropertyOptional({ maximum: 1000, default: 1000 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(1000) pageSize?: number;
 }

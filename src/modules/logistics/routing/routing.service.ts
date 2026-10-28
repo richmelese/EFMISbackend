@@ -6,6 +6,7 @@ import { AuthUser, RequestContext } from '../../../common/types/auth-user';
 import { Errors } from '../../../common/utils/errors';
 import { isValidCoordinate, LatLng, polylineLengthKm } from '../../../common/utils/geo';
 import { round } from '../../../common/utils/helpers';
+import { applySearch } from '../../../common/utils/query-filters';
 import { AuditService } from '../../audit/audit.service';
 import { SettingsService } from '../../settings/settings.service';
 import { Driver } from '../drivers/entities/driver.entities';
@@ -115,7 +116,7 @@ export class RoutingService {
     if (q.active) qb.andWhere('r.active = :active', { active: q.active === 'true' });
     if (q.originWarehouseId) qb.andWhere('r.originWarehouseId = :o', { o: q.originWarehouseId });
     if (q.destinationWarehouseId) qb.andWhere('r.destinationWarehouseId = :d', { d: q.destinationWarehouseId });
-    if (q.q) qb.andWhere('(r.code ILIKE :q OR r.name ILIKE :q)', { q: `%${q.q}%` });
+    applySearch(qb, ['r.code', 'r.name'], q.q);
     const [rows, total] = await qb.orderBy('r.code', 'ASC').skip(skip).take(take).getManyAndCount();
     const wh = await this.warehouseMap(rows.flatMap(r => [r.originWarehouseId, r.destinationWarehouseId]));
     const items = await Promise.all(rows.map(r => this.routeToFrontend(r, { warehouses: wh })));
@@ -285,7 +286,7 @@ export class RoutingService {
     if (q.kind) qb.andWhere('g.kind = :kind', { kind: q.kind });
     if (q.active) qb.andWhere('g.active = :active', { active: q.active === 'true' });
     if (q.warehouseId) qb.andWhere('g.warehouseId = :w', { w: q.warehouseId });
-    if (q.q) qb.andWhere('g.name ILIKE :q', { q: `%${q.q}%` });
+    applySearch(qb, ['g.name'], q.q);
     const [rows, total] = await qb.orderBy('g.name', 'ASC').skip(skip).take(take).getManyAndCount();
     return { items: rows.map(g => this.geofenceToFrontend(g)), total, page, pageSize };
   }

@@ -3,6 +3,7 @@ import {
   ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsLatitude, IsLongitude, IsNumber, IsOptional, IsString, IsUUID,
   Matches, Max, MaxLength, Min, MinLength
 } from 'class-validator';
+import { PageQueryDto } from '../../../../common/dto/pagination.dto';
 
 export const GEOFENCE_KINDS = ['WAREHOUSE', 'DEPOT', 'CHECKPOINT', 'BORDER', 'PORT', 'RESTRICTED'] as const;
 export const GEOFENCE_SHAPES = ['CIRCLE', 'POLYGON'] as const;
@@ -38,9 +39,7 @@ export class UpdateRouteDto {
   @IsOptional() @IsBoolean() recompute?: boolean;
 }
 
-export class RouteListQuery {
-  @IsOptional() @IsString() page?: string;
-  @IsOptional() @IsString() pageSize?: string;
+export class RouteListQuery extends PageQueryDto {
   @IsOptional() @IsString() q?: string;
   @IsOptional() @IsIn(['true', 'false']) active?: string;
   @IsOptional() @IsUUID() originWarehouseId?: string;
@@ -105,18 +104,14 @@ export class UpdateGeofenceDto {
   @ApiPropertyOptional() @IsOptional() @IsBoolean() active?: boolean;
 }
 
-export class GeofenceListQuery {
-  @IsOptional() @IsString() page?: string;
-  @IsOptional() @IsString() pageSize?: string;
+export class GeofenceListQuery extends PageQueryDto {
   @IsOptional() @IsString() q?: string;
   @IsOptional() @IsIn(GEOFENCE_KINDS as unknown as string[]) kind?: string;
   @IsOptional() @IsIn(['true', 'false']) active?: string;
   @IsOptional() @IsUUID() warehouseId?: string;
 }
 
-export class GeofenceEventsQuery {
-  @IsOptional() @IsString() page?: string;
-  @IsOptional() @IsString() pageSize?: string;
+export class GeofenceEventsQuery extends PageQueryDto {
   @IsOptional() @IsUUID() truckId?: string;
   @IsOptional() @IsUUID() tripId?: string;
   @IsOptional() @IsIn(['ENTERED', 'EXITED']) type?: string;

@@ -1,5 +1,8 @@
 import { SettingsService } from '../settings/settings.service';
 
+/** Re-exported for existing imports — the implementation lives in common/utils/pagination. */
+export { Paged, pageParams } from '../../common/utils/pagination';
+
 /** Runtime-configurable logistics thresholds (settings key 'logisticsThresholds'). */
 export interface LogisticsThresholds {
   gpsStaleMinutes: number;
@@ -37,18 +40,4 @@ export const DEFAULT_LOGISTICS_THRESHOLDS: LogisticsThresholds = {
 
 export async function logisticsThresholds(settings: SettingsService): Promise<LogisticsThresholds> {
   return { ...DEFAULT_LOGISTICS_THRESHOLDS, ...(await settings.get<Partial<LogisticsThresholds>>('logisticsThresholds', {})) };
-}
-
-/** Logistics list response envelope */
-export interface Paged<T> {
-  items: T[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
-export function pageParams(q: { page?: unknown; pageSize?: unknown }) {
-  const page = Math.max(parseInt(String(q.page ?? '1'), 10) || 1, 1);
-  const pageSize = Math.min(Math.max(parseInt(String(q.pageSize ?? '50'), 10) || 50, 1), 200);
-  return { page, pageSize, skip: (page - 1) * pageSize, take: pageSize };
 }

@@ -5,6 +5,7 @@ import { can, Role } from '../../../common/constants/permissions';
 import { AuthUser, RequestContext } from '../../../common/types/auth-user';
 import { Errors } from '../../../common/utils/errors';
 import { ACTIVE_TRIP_STATES, MOVING_TRIP_STATES } from '../../../common/utils/state-machine';
+import { applySearch } from '../../../common/utils/query-filters';
 import { AuditService } from '../../audit/audit.service';
 import { Paged, pageParams } from '../logistics.constants';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -53,12 +54,9 @@ export class GpsDevicesService {
     if (q.status) qb.andWhere('d.deviceStatus = :st', { st: q.status });
     if (q.assigned === 'true') qb.andWhere('d.truckId IS NOT NULL');
     if (q.assigned === 'false') qb.andWhere('d.truckId IS NULL');
-    if (q.q) {
-      const like = `%${q.q.replace(/[%_]/g, s => '\\' + s)}%`;
-      // IMEI search only for callers allowed to see IMEIs
-      if (this.sensitive(user)) qb.andWhere('(d.providerDeviceId ILIKE :q OR d.model ILIKE :q OR d.imei ILIKE :q)', { q: like });
-      else qb.andWhere('(d.providerDeviceId ILIKE :q OR d.model ILIKE :q)', { q: like });
-    }
+    // IMEI search only for callers allowed to see IMEIs
+    const searchCols = ['d.providerDeviceId', 'd.model', ...(this.sensitive(user) ? ['d.imei'] : [])];
+    applySearch(qb, searchCols, q.q);
     if (q.connectivity) {
       const c = this.fleet.connectivitySql('d', q.connectivity, th);
       qb.andWhere(c.sql, c.params);

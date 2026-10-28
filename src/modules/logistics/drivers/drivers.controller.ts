@@ -2,8 +2,9 @@ import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, P
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, ReqCtx, RequirePermissions } from '../../../common/decorators';
 import { AuthUser, RequestContext } from '../../../common/types/auth-user';
+import { PageQueryDto } from '../../../common/dto/pagination.dto';
 import {
-  AvailabilityQueryDto, CreateAvailabilityDto, CreateDriverDto, EligibleQueryDto, ExpiringQueryDto, ListDriversQueryDto, PageQueryDto,
+  AvailabilityQueryDto, CreateAvailabilityDto, CreateDriverDto, EligibleQueryDto, ExpiringQueryDto, ListDriversQueryDto,
   PerformanceQueryDto, ReactivateDriverDto, SuspendDriverDto, UpdateDriverDto, VerifyDriverDto
 } from './dto/driver.dto';
 import { DriversService } from './drivers.service';

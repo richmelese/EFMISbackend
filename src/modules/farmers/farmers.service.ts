@@ -14,6 +14,7 @@ import { RULES } from '../../common/constants/rules';
 import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { Errors } from '../../common/utils/errors';
 import { nowStamp, parseStamp, round, sha256, shortId, stamp, today } from '../../common/utils/helpers';
+import { applySearch } from '../../common/utils/query-filters';
 import { assertInScope, scopeCondition, UnitRef } from '../../common/utils/scope';
 import { AuditService } from '../audit/audit.service';
 import { ApprovalsService } from '../approvals/approvals.service';
@@ -190,7 +191,7 @@ export class FarmersService {
   async list(user: AuthUser, q: ListFarmersQueryDto) {
     const s = scopeCondition(user, 'f');
     const qb = this.repo.createQueryBuilder('f').leftJoinAndSelect('f.demands', 'd').where('f.deleted = false').andWhere(s.sql, s.params);
-    if (q.q) qb.andWhere('(f.name ILIKE :q OR f.id ILIKE :q OR f.faydaId ILIKE :q OR f.landCertNumber ILIKE :q OR f.kebele ILIKE :q)', { q: `%${q.q}%` });
+    applySearch(qb, ['f.name', 'f.id', 'f.faydaId', 'f.landCertNumber', 'f.kebele'], q.q);
     if (q.kebeleId) qb.andWhere('f.kebeleId = :kebeleId', { kebeleId: q.kebeleId });
     if (q.woredaId) qb.andWhere('f.woredaId = :woredaId', { woredaId: q.woredaId });
     if (q.regionId) qb.andWhere('f.regionId = :regionId', { regionId: q.regionId });

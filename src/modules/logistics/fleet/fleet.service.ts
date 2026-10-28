@@ -5,6 +5,7 @@ import { FLEET_WIDE_ROLES, Role } from '../../../common/constants/permissions';
 import { AuthUser, RequestContext } from '../../../common/types/auth-user';
 import { Errors } from '../../../common/utils/errors';
 import { ACTIVE_TRIP_STATES, MOVING_TRIP_STATES, TRUCK_AVAILABILITY } from '../../../common/utils/state-machine';
+import { applySearch } from '../../../common/utils/query-filters';
 import { AuditService } from '../../audit/audit.service';
 import { SettingsService } from '../../settings/settings.service';
 import { Driver } from '../drivers/entities/driver.entities';
@@ -289,7 +290,7 @@ export class FleetService {
     if (q.status) qb.andWhere('t.operationalStatus = :st', { st: q.status });
     if (q.availability) qb.andWhere('t.availabilityStatus = :av', { av: q.availability });
     if (q.vehicleTypeId) qb.andWhere('t.vehicleTypeId = :vt', { vt: q.vehicleTypeId });
-    if (q.q) qb.andWhere('(t.fleetCode ILIKE :q OR t.plateNumber ILIKE :q)', { q: `%${q.q.replace(/[%_]/g, s => '\\' + s)}%` });
+    applySearch(qb, ['t.fleetCode', 't.plateNumber'], q.q);
     if (q.connectivity === 'NO_DEVICE') qb.andWhere('d.id IS NULL');
     else if (q.connectivity) {
       const c = this.connectivitySql('d', q.connectivity, th);
@@ -491,7 +492,7 @@ export class FleetService {
   /** Assignment modal: every non-retired truck split into eligible / ineligible (with reasons) for the given load. */
   async eligibleTrucks(q: { quantity: number; cargoType?: string; requiresTracking?: string; excludeTripId?: string }) {
     const requiresTracking = q.requiresTracking !== 'false';
-    const { items } = await this.listTrucks({ pageSize: '200' } as TruckListQuery);
+    const { items } = await this.listTrucks({ pageSize: 200 } as TruckListQuery);
     const eligible: any[] = [];
     const ineligible: Array<{ truck: any; reasons: string[] }> = [];
     for (const t of items) {

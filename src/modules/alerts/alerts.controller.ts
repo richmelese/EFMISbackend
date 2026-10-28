@@ -9,6 +9,7 @@ import { AlertSeverity, RULES } from '../../common/constants/rules';
 import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { Errors } from '../../common/utils/errors';
 import { paginate } from '../../common/utils/helpers';
+import { PageQueryDto } from '../../common/dto/pagination.dto';
 import { AuditService } from '../audit/audit.service';
 import { CommentsService } from '../comments/comments.service';
 import { Alert } from './entities/alert.entity';
@@ -42,13 +43,11 @@ class SnoozeAlertDto {
   @ApiProperty() @IsString() @MinLength(3) reason: string;
 }
 
-class AlertListQuery {
+class AlertListQuery extends PageQueryDto {
   @IsOptional() @IsString() severity?: string;
   @IsOptional() @IsString() category?: string;
   @IsOptional() @IsString() resolved?: string;
   @IsOptional() @IsString() status?: string;
-  @IsOptional() @IsString() page?: string;
-  @IsOptional() @IsString() pageSize?: string;
 }
 
 const SEVERITY_RANK: Record<string, number> = { CRITICAL_RED: 0, HIGH_ORANGE: 1, MEDIUM_YELLOW: 2 };

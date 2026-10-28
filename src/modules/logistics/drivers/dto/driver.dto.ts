@@ -4,6 +4,7 @@ import {
   ArrayMaxSize, IsArray, IsDateString, IsEmail, IsIn, IsInt, IsNotEmpty, IsOptional, IsString, IsUUID, Length, Matches, Max, MaxLength, Min,
   MinLength, ValidateIf, ValidateNested
 } from 'class-validator';
+import { PageQueryDto } from '../../../../common/dto/pagination.dto';
 
 /** Ethiopian mobile numbers: 09xxxxxxxx (Ethio telecom) / 07xxxxxxxx (Safaricom) */
 export const ET_PHONE = /^0[79]\d{8}$/;
@@ -15,11 +16,6 @@ export const AVAILABILITY_TYPES = ['SHIFT', 'LEAVE', 'UNAVAILABLE', 'TRAINING'] 
 export const DRIVER_LIST_FILTERS = ['available', 'assigned', 'on_trip', 'document_expiring', 'unverified', 'inactive', 'suspended'] as const;
 /** Employment states settable via create/PATCH (SUSPENDED only through POST /drivers/:id/suspend) */
 export const EDITABLE_EMPLOYMENT = ['ACTIVE', 'INACTIVE', 'ON_LEAVE'] as const;
-
-export class PageQueryDto {
-  @ApiPropertyOptional({ default: 1 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) page?: number;
-  @ApiPropertyOptional({ default: 50, maximum: 200 }) @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(200) pageSize?: number;
-}
 
 export class ListDriversQueryDto extends PageQueryDto {
   @ApiPropertyOptional({ enum: DRIVER_LIST_FILTERS }) @IsOptional() @IsIn(DRIVER_LIST_FILTERS as unknown as string[]) status?: string;

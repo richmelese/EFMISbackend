@@ -5,6 +5,7 @@ import { can, Role } from '../../../common/constants/permissions';
 import { AuthUser, RequestContext } from '../../../common/types/auth-user';
 import { Errors } from '../../../common/utils/errors';
 import { ACTIVE_TRIP_STATES, MOVING_TRIP_STATES } from '../../../common/utils/state-machine';
+import { applySearch } from '../../../common/utils/query-filters';
 import { AuditService } from '../../audit/audit.service';
 import { SettingsService } from '../../settings/settings.service';
 import { User } from '../../users/entities/user.entity';
@@ -13,8 +14,9 @@ import { logisticsThresholds, Paged, pageParams } from '../logistics.constants';
 import { RealtimeService } from '../realtime/realtime.service';
 import { Delivery, Shipment, Trip, TripEvent, TripShipment } from '../shipments/entities/shipment.entities';
 import { DriverComplianceService, ComplianceScanSummary } from './driver-compliance.service';
+import { PageQueryDto } from '../../../common/dto/pagination.dto';
 import {
-  AvailabilityQueryDto, CreateAvailabilityDto, CreateDriverDto, EligibleQueryDto, ListDriversQueryDto, PageQueryDto, PerformanceQueryDto,
+  AvailabilityQueryDto, CreateAvailabilityDto, CreateDriverDto, EligibleQueryDto, ListDriversQueryDto, PerformanceQueryDto,
   ReactivateDriverDto, SuspendDriverDto, UpdateDriverDto, VerifyDriverDto
 } from './dto/driver.dto';
 import { Driver, DriverAvailability, DriverDocument, DriverTripAssignment } from './entities/driver.entities';
@@ -279,15 +281,7 @@ export class DriversService {
       if (!own) return { items: [], total: 0, page, pageSize };
       qb.andWhere('d.id = :own', { own: own.id });
     }
-    if (q.q?.trim()) {
-      const like = `%${q.q.trim()}%`;
-      qb.andWhere(new Brackets(b => b
-        .where('d.firstName ILIKE :like', { like })
-        .orWhere('d.lastName ILIKE :like', { like })
-        .orWhere(`(d.firstName || ' ' || d.lastName) ILIKE :like`, { like })
-        .orWhere('d.employeeNumber ILIKE :like', { like })
-        .orWhere('d.phone ILIKE :like', { like })));
-    }
+    applySearch(qb, ['d.firstName', 'd.lastName', `(d.firstName || ' ' || d.lastName)`, 'd.employeeNumber', 'd.phone'], q.q?.trim());
     switch (q.status) {
       case 'available': qb.andWhere(`d.availabilityStatus = 'AVAILABLE'`); break;
       case 'assigned': qb.andWhere(`d.availabilityStatus = 'ASSIGNED'`); break;

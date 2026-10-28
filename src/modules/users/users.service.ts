@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { Brackets, DataSource, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { User } from './entities/user.entity';
@@ -9,6 +9,8 @@ import { AdministrativeScope, AuthUser, RequestContext } from '../../common/type
 import { Permission, Role } from '../../common/constants/permissions';
 import { Errors } from '../../common/utils/errors';
 import { shortId, stamp } from '../../common/utils/helpers';
+import { pageParams } from '../../common/utils/pagination';
+import { applySearch } from '../../common/utils/query-filters';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { AuditService } from '../audit/audit.service';
 import { RbacService } from './rbac.service';
@@ -96,18 +98,13 @@ export class UsersService {
   // ------------------------------------------------------------------ queries
 
   async list(q: ListUsersQueryDto = {}) {
-    const page = q.page ?? 1;
-    const pageSize = Math.min(q.pageSize ?? 50, 200);
+    const { page, pageSize, skip, take } = pageParams(q);
     const qb = this.repo.createQueryBuilder('u');
     if (q.role) qb.andWhere('u.role = :role', { role: q.role });
     if (q.active) qb.andWhere('u.active = :active', { active: q.active === 'true' });
     if (q.regionId) qb.andWhere('u.regionId = :regionId', { regionId: q.regionId });
-    if (q.q) {
-      const like = `%${q.q.trim().toLowerCase()}%`;
-      qb.andWhere(new Brackets(b => b.where('LOWER(u.fullName) LIKE :like', { like }).orWhere('LOWER(u.email) LIKE :like', { like })
-        .orWhere('u.phone LIKE :like', { like }).orWhere('LOWER(u.title) LIKE :like', { like }).orWhere('LOWER(u.id) LIKE :like', { like })));
-    }
-    const [rows, total] = await qb.orderBy('u.active', 'DESC').addOrderBy('u.fullName', 'ASC').skip((page - 1) * pageSize).take(pageSize).getManyAndCount();
+    applySearch(qb, ['u.fullName', 'u.email', 'u.phone', 'u.title', 'u.id'], q.q);
+    const [rows, total] = await qb.orderBy('u.active', 'DESC').addOrderBy('u.fullName', 'ASC').skip(skip).take(take).getManyAndCount();
     const roles = new Map((await this.roles.find()).map(r => [r.id, r]));
     return { items: rows.map(u => this.toFrontend(u, roles.get(u.role))), total, page, pageSize };
   }
