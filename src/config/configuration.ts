@@ -9,6 +9,8 @@ export interface AppConfig {
   corsOrigins: string[];
   db: { host: string; port: number; username: string; password: string; database: string; migrationsRun: boolean; seedOnStart: boolean };
   jwt: { secret: string; expiresIn: string };
+  /** HMAC key for electronic signatures (separate from the JWT secret; replaced by government PKI later). */
+  signatures: { secret: string };
   sessionIdleMinutes: number;
   demoMode: boolean;
   uploadDir: string;
@@ -39,6 +41,7 @@ export default (): AppConfig => {
       seedOnStart: bool(process.env.DB_SEED_ON_START, true)
     },
     jwt: { secret: process.env.JWT_SECRET || 'change-me-efmis-dev-secret', expiresIn: process.env.JWT_EXPIRES_IN || '8h' },
+    signatures: { secret: process.env.SIGNATURE_SECRET || 'change-me-efmis-dev-signature-secret' },
     sessionIdleMinutes: num(process.env.SESSION_IDLE_MINUTES, 15),
     demoMode: bool(process.env.DEMO_MODE, true),
     uploadDir: path.resolve(process.cwd(), process.env.UPLOAD_DIR || './uploads'),
@@ -69,6 +72,9 @@ export default (): AppConfig => {
   if (cfg.env === 'production') {
     if (cfg.jwt.secret === 'change-me-efmis-dev-secret') throw new Error('JWT_SECRET must be set in production');
     if (cfg.jwt.secret.length < 32) throw new Error('JWT_SECRET must be at least 32 characters in production');
+    if (cfg.signatures.secret === 'change-me-efmis-dev-signature-secret') throw new Error('SIGNATURE_SECRET must be set in production');
+    if (cfg.signatures.secret.length < 32) throw new Error('SIGNATURE_SECRET must be at least 32 characters in production');
+    if (cfg.signatures.secret === cfg.jwt.secret) throw new Error('SIGNATURE_SECRET must differ from JWT_SECRET');
     // Seeding creates demo accounts with a published password — never in production (create the first admin with create-admin).
     if (cfg.db.seedOnStart) throw new Error('DB_SEED_ON_START must be false in production');
     if (cfg.corsOrigins.includes('*')) throw new Error('CORS_ORIGINS must list explicit origins in production');

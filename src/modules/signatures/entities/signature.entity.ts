@@ -31,6 +31,10 @@ export class Signature {
   @Column({ type: 'varchar', length: 64 })
   signatureHash: string;
 
+  /** Which key produced signatureHash: 'sig-v1' (SIGNATURE_SECRET) or 'jwt-legacy' (signed before the keys were split). */
+  @Column({ type: 'varchar', length: 20, default: 'jwt-legacy' })
+  keyId: string;
+
   /** Exact signing timestamp string (part of the signed material) */
   @Column({ type: 'varchar', length: 30 })
   signedAt: string;

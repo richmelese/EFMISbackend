@@ -22,7 +22,11 @@
     "seed:reset": "ts-node -r tsconfig-paths/register src/database/seeds/run-seed.ts --reset",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:e2e": "jest --config test/jest-e2e.json --runInBand",
-    "create-admin": "ts-node -r tsconfig-paths/register src/database/create-admin.ts"
+    "create-admin": "ts-node -r tsconfig-paths/register src/database/create-admin.ts",
+    "postbuild": "node dist/openapi-export.js",
+    "openapi:export": "node dist/openapi-export.js",
+    "openapi:check": "node scripts/openapi-check.mjs",
+    "test": "jest --config jest.config.js"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.5",

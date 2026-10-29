@@ -1,6 +1,6 @@
-import { Body, Controller, Get, HttpCode, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Patch, Post, UseGuards, Version } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { AllowPendingPasswordChange, CurrentUser, Public, ReqCtx } from '../../common/decorators';
 import { ChangePasswordDto } from '../users/dto/user.dto';
@@ -8,6 +8,7 @@ import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { UsersService } from '../users/users.service';
 import { AuthService } from './auth.service';
 import { ChangePinDto, DemoLoginDto, LoginDto, OtpRequestDto, OtpVerifyDto, UpdateMeDto } from './dto/auth.dto';
+import { RealtimeTicketDto } from './realtime-ticket';
 
 @ApiTags('Auth (REQ-1.7-001)')
 @Controller('auth')
@@ -79,6 +80,16 @@ export class AuthController {
   @ApiOperation({ summary: 'Change e-signature PIN' })
   changePin(@CurrentUser() user: AuthUser, @Body() dto: ChangePinDto, @ReqCtx() ctx: RequestContext) {
     return this.auth.changePin(user, dto, ctx);
+  }
+
+  @ApiBearerAuth()
+  @Version('1')
+  @Post('realtime-ticket')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Short-lived (60 s) ticket for opening the realtime socket; rejected by the REST API' })
+  @ApiOkResponse({ type: RealtimeTicketDto })
+  realtimeTicket(@CurrentUser() user: AuthUser): Promise<RealtimeTicketDto> {
+    return this.auth.realtimeTicket(user);
   }
 
   @ApiBearerAuth()

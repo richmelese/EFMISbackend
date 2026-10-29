@@ -18,7 +18,8 @@ type SubscribeTarget = { type: 'truck' | 'trip' | 'shipment'; id: string };
 
 /**
  * Live logistics WebSocket (Socket.IO) at namespace /realtime.
- * Auth: JWT in `auth.token` (or `?token=`) during the handshake — same tokens as the REST API; revoked tokens rejected.
+ * Auth: JWT in `auth.token` (or `?token=`) during the handshake — a session token or a short-lived realtime ticket
+ * (POST /api/v1/auth/realtime-ticket); revoked sessions are rejected for both.
  * Authorisation (Logistics doc §16 "do not broadcast all vehicles to every user"):
  *   - fleet-wide roles (Logistics Manager, Dispatcher, Fleet Manager, MoA, PMO, EABC, Admin, Auditor) join `fleet:all`
  *   - DRIVER joins `driver:<id>` (only their own assignments/trips)

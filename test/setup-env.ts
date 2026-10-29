@@ -13,6 +13,7 @@ process.env.DB_SEED_ON_START = 'false';
 process.env.SCHEDULER_ENABLED = 'false';
 process.env.DEMO_MODE = 'true';
 process.env.JWT_SECRET = 'efmis-e2e-secret';
+process.env.SIGNATURE_SECRET = 'efmis-e2e-signature-secret';
 process.env.UPLOAD_DIR = path.join(os.tmpdir(), 'efmis-e2e-uploads');
 process.env.REDIS_URL = ''; // inline jobs + in-memory hot state: deterministic tests
 process.env.TRACCAR_URL = ''; // never poll a real GPS platform from tests

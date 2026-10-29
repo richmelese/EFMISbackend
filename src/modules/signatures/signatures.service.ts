@@ -15,6 +15,10 @@ export interface SignatureCredentials {
   password?: string;
 }
 
+/** Key used for new signatures; older rows keep the key id they were signed with. */
+export const CURRENT_SIGNATURE_KEY = 'sig-v1';
+const LEGACY_SIGNATURE_KEY = 'jwt-legacy';
+
 export interface SignatureResult {
   id: string;
   signer: string;
@@ -27,22 +31,29 @@ export interface SignatureResult {
 /**
  * Electronic signatures (Proclamation No. 1078/2018). The signer re-authenticates with PIN or password; the
  * signature binds signer + target + sha256(payload) + time with an HMAC so tampering is detectable.
+ * The HMAC key is SIGNATURE_SECRET (key id 'sig-v1'); signatures made before the key split are verified with the JWT
+ * secret (key id 'jwt-legacy'), so existing records stay verifiable.
  * Production: replace the HMAC with government PKI (X.509) — the sign()/verify() contract stays the same.
  */
 @Injectable()
 export class SignaturesService {
-  private readonly secret: string;
+  private readonly keys: Record<string, string>;
 
   constructor(
     @InjectRepository(Signature) private readonly repo: Repository<Signature>,
     @InjectRepository(User) private readonly users: Repository<User>,
     config: ConfigService
   ) {
-    this.secret = config.get<string>('jwt.secret')!;
+    this.keys = {
+      [CURRENT_SIGNATURE_KEY]: config.get<string>('signatures.secret')!,
+      [LEGACY_SIGNATURE_KEY]: config.get<string>('jwt.secret')!
+    };
   }
 
-  private hmac(parts: string[]): string {
-    return crypto.createHmac('sha256', this.secret).update(parts.join('|')).digest('hex');
+  private hmac(parts: string[], keyId: string = CURRENT_SIGNATURE_KEY): string {
+    const key = this.keys[keyId];
+    if (!key) throw new Error(`Unknown signature key id "${keyId}"`);
+    return crypto.createHmac('sha256', key).update(parts.join('|')).digest('hex');
   }
 
   private async checkCredential(user: AuthUser, cred: SignatureCredentials, manager?: EntityManager): Promise<'PIN' | 'PASSWORD'> {
@@ -65,7 +76,8 @@ export class SignaturesService {
     const signatureHash = this.hmac([user.id, targetType, targetId, payloadHash, at]);
     const id = shortId('SIG');
     await (manager ? manager.getRepository(Signature) : this.repo).insert({
-      id, userId: user.id, signerName: user.name, role: user.role, method, targetType, targetId, payloadHash, signatureHash, signedAt: at
+      id, userId: user.id, signerName: user.name, role: user.role, method, targetType, targetId, payloadHash, signatureHash, signedAt: at,
+      keyId: CURRENT_SIGNATURE_KEY
     });
     return { id, signer: user.name, role: user.role, method, signedAt: at, hash: `sha256:${signatureHash}` };
   }
@@ -73,13 +85,13 @@ export class SignaturesService {
   async verify(signatureId: string, payload?: unknown) {
     const s = await this.repo.findOne({ where: { id: signatureId } });
     if (!s) return { valid: false, reason: 'Signature not found' };
-    const expected = this.hmac([s.userId, s.targetType, s.targetId, s.payloadHash, s.signedAt]);
+    const expected = this.hmac([s.userId, s.targetType, s.targetId, s.payloadHash, s.signedAt], s.keyId || LEGACY_SIGNATURE_KEY);
     const payloadOk = payload === undefined ? true : sha256(payload) === s.payloadHash;
     return {
       valid: expected === s.signatureHash && payloadOk,
       tamperEvident: !payloadOk,
       signer: s.signerName, role: s.role, method: s.method, signedAt: s.signedAt,
-      target: `${s.targetType}:${s.targetId}`, hash: `sha256:${s.signatureHash}`
+      target: `${s.targetType}:${s.targetId}`, hash: `sha256:${s.signatureHash}`, keyId: s.keyId
     };
   }
 

@@ -11,6 +11,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { HealthController } from './health.controller';
 import { SeedModule } from './database/seeds/seed.module';
+import { DomainEventsModule } from './common/events';
 // Platform (cross-cutting, @Global)
 import { SettingsModule } from './modules/settings/settings.module';
 import { AuditModule } from './modules/audit/audit.module';
@@ -49,7 +50,7 @@ import { LogisticsModule } from './modules/logistics/logistics.module';
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 600 }]),
     // platform
-    SettingsModule, AuditModule, UsersModule, AuthModule, SignaturesModule, NotificationsModule, AlertsModule,
+    DomainEventsModule, SettingsModule, AuditModule, UsersModule, AuthModule, SignaturesModule, NotificationsModule, AlertsModule,
     CommentsModule, ApprovalsModule, ExternalModule, HierarchyModule,
     // domains
     FarmersModule, KebeleReviewModule, AggregationModule, ReviewsModule, RegionalModule, NationalModule, QuotaModule,

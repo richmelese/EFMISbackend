@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { Logger, ValidationError, ValidationPipe, VersioningType } from '@nestjs/common';
+import { INestApplication, Logger, ValidationError, ValidationPipe, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -14,12 +14,20 @@ const flattenValidation = (e: ValidationError, prefix = ''): Array<{ field: stri
   return Object.values(e.constraints || {}).map(message => ({ field, message })).concat((e.children || []).flatMap(c => flattenValidation(c, field)));
 };
 
+/**
+ * Route shape shared by the running app and the OpenAPI export: everything under /api; controllers or routes that
+ * declare a version are served under /api/v<n>/... (new and changed routes use version '1'; untouched EFMIS routes
+ * stay unversioned until their roadmap phase replaces them).
+ */
+export function applyRouting(app: INestApplication) {
+  app.setGlobalPrefix('api');
+  app.enableVersioning({ type: VersioningType.URI });
+}
+
 /** Shared bootstrap configuration (also used by the e2e tests). */
 export function configureApp(app: NestExpressApplication) {
   const config = app.get(ConfigService);
-  app.setGlobalPrefix('api');
-  // Logistics controllers declare version '1' -> /api/v1/...; existing EFMIS controllers stay unversioned (/api/...)
-  app.enableVersioning({ type: VersioningType.URI });
+  applyRouting(app);
   app.set('trust proxy', 1);
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   const origins = config.get<string[]>('corsOrigins') || [];
@@ -38,17 +46,22 @@ export function configureApp(app: NestExpressApplication) {
   return app;
 }
 
-async function bootstrap() {
-  const app = configureApp(await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: false }));
-  const config = app.get(ConfigService);
-
+/** The OpenAPI document served at /api/docs and exported to openapi.json (see openapi-export.ts). */
+export function buildOpenApiDocument(app: INestApplication) {
   const swagger = new DocumentBuilder()
     .setTitle('EFMIS API')
     .setDescription('Ethiopian Fertilizer Supply Chain Management Information System — Demand Forecasting & Planning, Quota Allocation and Integration Framework (Requirements Specification, Aug 2026)')
     .setVersion('2.0')
     .addBearerAuth()
     .build();
-  SwaggerModule.setup('api/docs', app, SwaggerModule.createDocument(app, swagger));
+  return SwaggerModule.createDocument(app, swagger);
+}
+
+async function bootstrap() {
+  const app = configureApp(await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: false }));
+  const config = app.get(ConfigService);
+
+  SwaggerModule.setup('api/docs', app, buildOpenApiDocument(app));
 
   if (config.get<boolean>('db.seedOnStart')) await app.get(SeedService).seedIfEmpty();
 

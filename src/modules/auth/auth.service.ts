@@ -15,6 +15,7 @@ import { AppError, Errors } from '../../common/utils/errors';
 import { randomDigits } from '../../common/utils/helpers';
 import { HotStateService } from '../logistics/jobs/hot-state.service';
 import { ChangePinDto, LoginDto, OtpRequestDto, OtpVerifyDto } from './dto/auth.dto';
+import { REALTIME_TICKET_AUDIENCE, REALTIME_TICKET_TTL_SECONDS, RealtimeTicketDto } from './realtime-ticket';
 
 const OTP_TTL_MIN = 5;
 const MAX_OTP_ATTEMPTS = 5;
@@ -61,6 +62,19 @@ export class AuthService {
     const role = await this.users.roleInfo(u.role);
     const { exp } = this.jwt.decode(token) as { exp: number };
     return { token, tokenType: 'Bearer', expiresAt: new Date(exp * 1000).toISOString(), user: { ...user, roleLevel: role?.level } };
+  }
+
+  /**
+   * Short-lived ticket for the realtime socket. It carries the session's jti, so signing the session out also
+   * invalidates any ticket issued from it.
+   */
+  async realtimeTicket(user: AuthUser): Promise<RealtimeTicketDto> {
+    const ticket = await this.jwt.signAsync(
+      { sub: user.id, role: user.role, jti: user.jti },
+      { audience: REALTIME_TICKET_AUDIENCE, expiresIn: REALTIME_TICKET_TTL_SECONDS }
+    );
+    const { exp } = this.jwt.decode(ticket) as { exp: number };
+    return { ticket, expiresAt: new Date(exp * 1000).toISOString() };
   }
 
   async login(dto: LoginDto, ctx: RequestContext) {
