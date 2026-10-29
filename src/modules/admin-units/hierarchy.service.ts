@@ -8,7 +8,7 @@ import { Kebele } from './entities/kebele.entity';
 import { FertilizerType } from './entities/fertilizer-type.entity';
 import { Errors } from '../../common/utils/errors';
 import { UnitRef } from '../../common/utils/scope';
-import { AdminUnitsService } from '../admin-units/admin-units.service';
+import { AdminUnitsService } from './admin-units.service';
 
 export interface KebeleChain {
   kebele: Kebele;

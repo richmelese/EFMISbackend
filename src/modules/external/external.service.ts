@@ -5,7 +5,7 @@ import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
 import { Farmer } from '../farmers/entities/farmer.entity';
 import { FaydaVerification } from '../farmers/entities/fayda-verification.entity';
-import { NsisSoilProfile } from '../hierarchy/entities/nsis-soil-profile.entity';
+import { NsisSoilProfile } from '../admin-units/entities/nsis-soil-profile.entity';
 import { AuthUser } from '../../common/types/auth-user';
 import { stamp } from '../../common/utils/helpers';
 

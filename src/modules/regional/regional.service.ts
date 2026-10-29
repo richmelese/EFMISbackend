@@ -3,20 +3,21 @@ import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Not, Repository } from 'typeorm';
 import { RegionalSubmission } from './entities/regional-submission.entity';
 import { Farmer } from '../farmers/entities/farmer.entity';
-import { Region } from '../hierarchy/entities/region.entity';
-import { Zone } from '../hierarchy/entities/zone.entity';
+import { Region } from '../admin-units/entities/region.entity';
+import { Zone } from '../admin-units/entities/zone.entity';
 import { RULES } from '../../common/constants/rules';
 import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { Errors } from '../../common/utils/errors';
 import { nowStamp, round, sha256, stamp } from '../../common/utils/helpers';
 import { assertInScope, assertUnitVisible, isNational } from '../../common/utils/scope';
-import { HierarchyService } from '../hierarchy/hierarchy.service';
+import { HierarchyService } from '../admin-units/hierarchy.service';
+import { AdminUnitsService } from '../admin-units/admin-units.service';
 import { AggregationService } from '../aggregation/aggregation.service';
 import { ExternalService, NSIS_LAYERS } from '../external/external.service';
 import { AuditService } from '../audit/audit.service';
 import { SignaturesService } from '../signatures/signatures.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { ApprovalsService } from '../approvals/approvals.service';
+import { ApprovalsService } from '../workflow/approvals.service';
 import { SettingsService } from '../settings/settings.service';
 import { SubmitRegionDto } from './dto/regional.dto';
 
@@ -36,6 +37,7 @@ export class RegionalService {
     @InjectRepository(RegionalSubmission) private readonly submissions: Repository<RegionalSubmission>,
     @InjectRepository(Farmer) private readonly farmers: Repository<Farmer>,
     private readonly hierarchy: HierarchyService,
+    private readonly adminUnits: AdminUnitsService,
     private readonly aggregation: AggregationService,
     private readonly external: ExternalService,
     private readonly audit: AuditService,
@@ -49,7 +51,7 @@ export class RegionalService {
   private async regionRow(id: string, user: AuthUser, act = false): Promise<Region> {
     const r = await this.hierarchy.regions.findOne({ where: { id } });
     if (!r) throw Errors.notFound('Region');
-    const unit = await this.hierarchy.unitRef('REGION', r.id);
+    const unit = await this.adminUnits.unitRef(r.id);
     if (act) assertInScope(user, unit, 'region');
     else assertUnitVisible(user, unit, 'region');
     return r;

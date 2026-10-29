@@ -5,7 +5,7 @@ import { SEED_USERS, startTestApi, TestApi } from './helpers/e2e';
 import { registerTestWorkflows } from './helpers/workflow-fixtures';
 import { DomainEvents } from '../src/common/events';
 import { DEMO_PIN } from '../src/database/seeds/seed.service';
-import { ApprovalsService } from '../src/modules/approvals/approvals.service';
+import { ApprovalsService } from '../src/modules/workflow/approvals.service';
 import { WorkflowRegistry } from '../src/modules/workflow/workflow.registry';
 import { WorkflowService } from '../src/modules/workflow/workflow.service';
 import { WorkflowAdvanced } from '../src/modules/workflow/workflow.types';

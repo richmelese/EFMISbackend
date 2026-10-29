@@ -6,7 +6,9 @@ import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { Errors } from '../../common/utils/errors';
 import { nowStamp, toCsv } from '../../common/utils/helpers';
 import { assertInScope, assertUnitVisible, isNational, unitVisible } from '../../common/utils/scope';
-import { HierarchyService, UnitLevel } from '../hierarchy/hierarchy.service';
+import { HierarchyService, UnitLevel } from '../admin-units/hierarchy.service';
+import { AdminUnitsService } from '../admin-units/admin-units.service';
+import { COUNTRY_UNIT_ID } from '../admin-units/admin-unit-backfill';
 import { AuditService } from '../audit/audit.service';
 import { AggregationService } from './aggregation.service';
 
@@ -19,6 +21,7 @@ export class AggregationController {
   constructor(
     private readonly aggregation: AggregationService,
     private readonly hierarchy: HierarchyService,
+    private readonly adminUnits: AdminUnitsService,
     private readonly audit: AuditService
   ) {}
 
@@ -38,7 +41,7 @@ export class AggregationController {
   private async regionVisible(user: AuthUser): Promise<(regionId: string) => boolean> {
     if (isNational(user)) return () => true;
     const refs = new Map<string, boolean>();
-    for (const r of await this.hierarchy.adminUnits.children('ET')) refs.set(r.id, unitVisible(user, { regionId: r.id, path: r.path }));
+    for (const r of await this.adminUnits.children(COUNTRY_UNIT_ID)) refs.set(r.id, unitVisible(user, { regionId: r.id, path: r.path }));
     return id => refs.get(id) ?? false;
   }
 

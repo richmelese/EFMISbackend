@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Farmer } from '../farmers/entities/farmer.entity';
-import { Region } from '../hierarchy/entities/region.entity';
+import { Region } from '../admin-units/entities/region.entity';
 import { DemandDocument } from '../national/entities/demand-document.entities';
 import { PurchaseOrder, QuotaAdjustmentRequest, QuotaAllocation, QuotaLetter } from '../quota/entities/quota.entities';
 import { FarmersModule } from '../farmers/farmers.module';

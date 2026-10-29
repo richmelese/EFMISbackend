@@ -11,7 +11,7 @@ import { Errors } from '../../common/utils/errors';
 import { shortId, stamp } from '../../common/utils/helpers';
 import { pageParams } from '../../common/utils/pagination';
 import { applySearch } from '../../common/utils/query-filters';
-import { HierarchyService } from '../hierarchy/hierarchy.service';
+import { HierarchyService } from '../admin-units/hierarchy.service';
 import { AdminUnitsService } from '../admin-units/admin-units.service';
 import { scopeUnitId } from '../../common/utils/scope';
 import { AuditService } from '../audit/audit.service';

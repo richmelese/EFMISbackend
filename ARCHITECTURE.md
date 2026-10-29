@@ -30,11 +30,13 @@ src/
     migrations/              InitialSchema + ImmutableAuditTriggers (audit_log, approval_actions are write-once)
     seeds/                   SeedService (frontend master data -> DB), run-seed.ts
   modules/
-    <platform, all @Global>  settings, audit, users, auth, signatures, notifications, alerts, comments,
-                             approvals, external (Fayda/NRLAIS/NSIS adapters), hierarchy (facade), aggregation,
-                             admin-units (ltree unit tree), seasons, workflow (approval engine), outbox
-    <domains>                farmers, kebele-review, reviews, regional, national, quota, integrations,
-                             reports, ussd, dashboard, scheduler
+    <platform>               auth, users, settings, audit, signatures, comments, alerts, notifications,
+                             admin-units (ltree unit tree + legacy region/zone/woreda/kebele tables, HierarchyService
+                             facade), seasons, workflow (approval engine + legacy approval_actions), outbox,
+                             external (Fayda/NRLAIS/NSIS adapters), scheduler
+    <domains>                farmers, reviews (kebele + woreda/zone review), aggregation, regional, national,
+                             quota, integrations, reports, dashboard, ussd, logistics
+                             (aggregation is @Global for injection convenience; it is still a domain module)
 ```
 
 Each domain module: `<name>.module.ts`, `<name>.controller.ts` (thin: routing, DTOs, guards, Swagger),
@@ -95,9 +97,9 @@ Each domain module: `<name>.module.ts`, `<name>.controller.ts` (thin: routing, D
 | NotificationsService | `notify({ userId?, role?, unitId?, title, message, link?, channels? }, manager?)` |
 | AlertsService | `raise({ severity, title, category, trigger, affectedArea, actionRequired, sourceType, sourceId, dedupeKey }, manager?)`, `toFrontend(alert)`, `repo` |
 | CommentsService | `list(scopeType, scopeId)`, `add(user, scopeType, scopeId, text, parentId?, manager?)` (parses @mentions) |
-| ApprovalsService | `record(user, { entityType, entityId, level, action, comments, details, signatureId }, manager?)`, `history(type, id)` |
+| ApprovalsService (workflow/) | legacy log for pre-engine screens: `record(user, { entityType, entityId, level, action, comments, details, signatureId }, manager?)`; read history with `WorkflowService.history()` |
 | ExternalService | `faydaVerify(id, { user, expected })`, `nrlaisVerify(cert)`, `nsisProfile(regionId)`, `nsisRaw(regionId)`; `FAYDA_MESSAGES`, `NSIS_LAYERS` |
-| HierarchyService | facade (legacy tables + admin-units): `resolveKebele(id)`, `unitRef(level, id)`, `regionToFrontend(r)`, `nestedRegions(regionId?)`, repos `regions/zones/woredas/kebeles/fertilizerTypes` |
+| HierarchyService (admin-units/) | facade over the legacy tables; new code uses AdminUnitsService: `resolveKebele(id)`, `unitRef(level, id)`, `regionToFrontend(r)`, `nestedRegions(regionId?)`, repos `regions/zones/woredas/kebeles/fertilizerTypes` |
 | AggregationService | `drilldown(level, id)`, `nationalSummary()`, `byType(mt)`, `approvedFarmerDemand(col, id)` |
 | NationalFiguresService | `carryOver()`, `netImport()`, `updateCarryOver(user, type, changes, manager?)` |
 | UsersService | `toAuthUser(user)`, `findActive(id)`, `contactsFor({ userId, role, unitId }, m?)`, `repo` |
@@ -131,6 +133,12 @@ Each domain module: `<name>.module.ts`, `<name>.controller.ts` (thin: routing, D
 - **Realtime tickets**: `POST /api/v1/auth/realtime-ticket` returns a 60-second JWT (audience `efmis-realtime`) that
   opens the `/realtime` socket. The REST API rejects it (`TICKET_NOT_FOR_API`), and it carries the session's jti so
   signing out revokes it. This lets the web portal keep the session token in an httpOnly cookie.
+
+## Module rules checked by tests
+
+`src/architecture.spec.ts` (unit test) fails when the module folders drift from the target layout or when a platform
+module imports a domain module (rule 2). Its `KNOWN_DEBT` list holds the few platform → domain imports that predate the
+rule (scheduler reminders, Fayda cache, session hot-state), each with the roadmap phase that removes it.
 
 ## Tests
 

@@ -12,8 +12,6 @@ export type JobHandler = (data: any) => Promise<void>;
 export const QUEUES = {
   /** GPS position post-processing: geofences, milestones, route deviation, ETA, delay detection */
   TRACKING: 'tracking-events',
-  /** Outbound notification delivery (EMAIL / SMS / PUSH) */
-  NOTIFICATIONS: 'notifications',
   /** Heavy/batch work (reports, KPI recomputation) */
   BACKGROUND: 'background'
 } as const;
@@ -28,7 +26,8 @@ const DEFAULT_OPTS: JobsOptions = {
 };
 
 /**
- * Queue abstraction (Logistics doc §2/§11: "Queue workers for notifications and heavy processing").
+ * Queue abstraction (Logistics doc §2/§11: "Queue workers for heavy processing"; outbound notifications go through the
+ * platform outbox).
  *  - REDIS_URL set   → BullMQ queues + workers, retries with exponential backoff; exhausted jobs go to the job_failures
  *                      dead-letter table.
  *  - REDIS_URL empty → handlers run inline (same retry count, synchronous) so dev and tests need no Redis.

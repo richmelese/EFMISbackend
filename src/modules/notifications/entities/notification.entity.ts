@@ -1,8 +1,9 @@
 import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 /**
- * Notification outbox (REQ-1.2-006 channels). IN_APP rows are served to users; EMAIL/SMS/PUSH rows are picked up
- * by a delivery worker (deliveredAt) once a gateway is configured.
+ * Notification record per channel (REQ-1.2-006). IN_APP rows are the notification centre; EMAIL/SMS/PUSH rows record
+ * what was sent — the delivery itself goes through the platform outbox (outbox_messages). `deliveredAt` is legacy
+ * (set by the retired logistics delivery worker) and no longer written.
  */
 @Entity('notifications')
 @Index(['recipientUserId'])

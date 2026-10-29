@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { ApprovalAction } from './entities/approval-action.entity';
 import { AuthUser } from '../../common/types/auth-user';
-import { stamp } from '../../common/utils/helpers';
 
 export interface ApprovalInput {
   entityType: 'FARMER' | 'WOREDA' | 'ZONE' | 'REGION';
@@ -15,7 +14,11 @@ export interface ApprovalInput {
   signatureId?: string | null;
 }
 
-/** Writes/reads the immutable approval action log. */
+/**
+ * Legacy approval log (approval_actions, write-once). The screens that predate the workflow engine still record their
+ * decisions here; history is read through WorkflowService.history(), which merges it with workflow_actions.
+ * New approval flows use a WorkflowDefinition instead (roadmap Phase 4+ move these screens onto it).
+ */
 @Injectable()
 export class ApprovalsService {
   constructor(@InjectRepository(ApprovalAction) private readonly repo: Repository<ApprovalAction>) {}
@@ -26,11 +29,6 @@ export class ApprovalsService {
       ...input, comments: input.comments ?? null, details: input.details ?? null, signatureId: input.signatureId ?? null,
       userId: user.id, userName: user.name
     }));
-  }
-
-  async history(entityType: string, entityId: string) {
-    const rows = await this.repo.find({ where: { entityType, entityId }, order: { id: 'ASC' } });
-    return rows.map(a => ({ level: a.level, action: a.action, comments: a.comments, details: a.details, by: a.userName, at: stamp(a.createdAt), signatureId: a.signatureId }));
   }
 
   get repository() {

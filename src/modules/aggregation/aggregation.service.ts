@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Region } from '../hierarchy/entities/region.entity';
-import { Zone } from '../hierarchy/entities/zone.entity';
-import { Woreda } from '../hierarchy/entities/woreda.entity';
-import { Kebele } from '../hierarchy/entities/kebele.entity';
+import { Region } from '../admin-units/entities/region.entity';
+import { Zone } from '../admin-units/entities/zone.entity';
+import { Woreda } from '../admin-units/entities/woreda.entity';
+import { Kebele } from '../admin-units/entities/kebele.entity';
 import { Farmer } from '../farmers/entities/farmer.entity';
 import { FarmerDemand } from '../farmers/entities/farmer-demand.entity';
 import { RULES } from '../../common/constants/rules';

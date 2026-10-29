@@ -5,7 +5,7 @@ import { CurrentUser, ReqCtx, RequirePermissions } from '../../common/decorators
 import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { Errors } from '../../common/utils/errors';
 import { assertUnitVisible } from '../../common/utils/scope';
-import { HierarchyService } from '../hierarchy/hierarchy.service';
+import { HierarchyService } from '../admin-units/hierarchy.service';
 import { AuditService } from '../audit/audit.service';
 import { ExternalService, FAYDA_MESSAGES } from '../external/external.service';
 import { FaydaVerifyDto, NrlaisVerifyDto } from './dto/identity.dto';

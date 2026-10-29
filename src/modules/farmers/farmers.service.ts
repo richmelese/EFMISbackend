@@ -17,9 +17,9 @@ import { nowStamp, parseStamp, round, sha256, shortId, stamp, today } from '../.
 import { applySearch } from '../../common/utils/query-filters';
 import { assertInScope, scopeCondition, UnitRef } from '../../common/utils/scope';
 import { AuditService } from '../audit/audit.service';
-import { ApprovalsService } from '../approvals/approvals.service';
+import { WorkflowService } from '../workflow/workflow.service';
 import { ExternalService, FAYDA_MESSAGES, FaydaRecord } from '../external/external.service';
-import { HierarchyService } from '../hierarchy/hierarchy.service';
+import { HierarchyService } from '../admin-units/hierarchy.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
 
@@ -66,7 +66,7 @@ export class FarmersService {
     private readonly settings: SettingsService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
-    private readonly approvals: ApprovalsService,
+    private readonly workflow: WorkflowService,
     private readonly external: ExternalService,
     private readonly hierarchy: HierarchyService,
     private readonly config: ConfigService
@@ -244,7 +244,9 @@ export class FarmersService {
       ? await this.repo.find({ where: { faydaId: f.faydaId, id: Not(f.id), deleted: false }, select: ['id', 'season', 'approvalLevel'] })
       : [];
     return {
-      approvals: await this.approvals.history('FARMER', f.id),
+      approvals: (await this.workflow.history('FARMER', f.id)).map(a => ({
+        level: a.level, action: a.action, comments: a.comments, details: a.details, by: a.by, at: a.at, signatureId: a.signatureId
+      })),
       audit: await this.audit.list({ target: f.id }),
       previousSeasons: previous.map(p => ({ id: p.id, season: p.season, approval_level: p.approvalLevel }))
     };

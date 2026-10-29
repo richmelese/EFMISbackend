@@ -8,11 +8,11 @@ import { Errors } from '../../common/utils/errors';
 import { shortId, stamp } from '../../common/utils/helpers';
 import { assertUnitVisible, inScope, UnitRef, unitVisible } from '../../common/utils/scope';
 import { AdminUnitsService } from '../admin-units/admin-units.service';
-import { ApprovalsService } from '../approvals/approvals.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SignaturesService } from '../signatures/signatures.service';
 import { WorkflowAction } from './entities/workflow-action.entity';
+import { ApprovalAction } from './entities/approval-action.entity';
 import { WorkflowCase } from './entities/workflow-case.entity';
 import { AvailableActionDto, WorkflowCaseDto, WorkflowHistoryEntryDto } from './dto/workflow.dto';
 import { WorkflowRegistry } from './workflow.registry';
@@ -45,12 +45,12 @@ export class WorkflowService {
     @InjectDataSource() private readonly ds: DataSource,
     @InjectRepository(WorkflowCase) private readonly cases: Repository<WorkflowCase>,
     @InjectRepository(WorkflowAction) private readonly actions: Repository<WorkflowAction>,
+    @InjectRepository(ApprovalAction) private readonly legacyApprovals: Repository<ApprovalAction>,
     private readonly registry: WorkflowRegistry,
     private readonly units: AdminUnitsService,
     private readonly signatures: SignaturesService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
-    private readonly approvals: ApprovalsService,
     private readonly events: DomainEvents
   ) {}
 
@@ -202,9 +202,9 @@ export class WorkflowService {
 
   /** Legacy approval_actions and workflow_actions for one entity, oldest first. */
   async history(entityType: string, entityId: string): Promise<WorkflowHistoryEntryDto[]> {
-    const legacy: WorkflowHistoryEntryDto[] = (await this.approvals.history(entityType, entityId)).map(a => ({
+    const legacy: WorkflowHistoryEntryDto[] = (await this.legacyApprovals.find({ where: { entityType, entityId }, order: { id: 'ASC' } })).map(a => ({
       source: 'LEGACY', caseId: null, definition: null, level: a.level, action: a.action, fromStatus: null, toStatus: null,
-      comments: a.comments, details: a.details ?? null, by: a.by ?? null, at: a.at!, signatureId: a.signatureId
+      comments: a.comments, details: a.details ?? null, by: a.userName, at: stamp(a.createdAt)!, signatureId: a.signatureId
     }));
     const cases = await this.forEntity(entityType, entityId);
     const rows = cases.length ? await this.actions.find({ where: { caseId: In(cases.map(c => c.id)) }, order: { id: 'ASC' } }) : [];

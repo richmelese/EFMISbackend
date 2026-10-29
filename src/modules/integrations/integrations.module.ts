@@ -3,7 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { EcxPrice, LogisticsBottleneck, QualityInspection, Tender, Vessel } from './entities/integration.entities';
 import { PurchaseOrder } from '../quota/entities/quota.entities';
 import { Farmer } from '../farmers/entities/farmer.entity';
-import { Region } from '../hierarchy/entities/region.entity';
+import { Region } from '../admin-units/entities/region.entity';
 import { Truck } from '../logistics/fleet/entities/fleet.entities';
 import { InventoryBalance, Product, Warehouse } from '../logistics/warehouses/entities/warehouse.entities';
 import { TrackingModule } from '../logistics/tracking/tracking.module';

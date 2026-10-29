@@ -2802,212 +2802,6 @@
         ]
       }
     },
-    "/api/kebele/queue": {
-      "get": {
-        "operationId": "KebeleReviewController_queue",
-        "parameters": [],
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Kebele dashboard: farmers in scope + pending/flagged/arrears statistics",
-        "tags": [
-          "Kebele review (REQ-1.1-007)"
-        ]
-      }
-    },
-    "/api/kebele/farmers/{id}/approve": {
-      "post": {
-        "operationId": "KebeleReviewController_approve",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/KebeleApproveDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Approve a farmer demand (e-signature; optional per-type approvedQtl)",
-        "tags": [
-          "Kebele review (REQ-1.1-007)"
-        ]
-      }
-    },
-    "/api/kebele/farmers/{id}/reject": {
-      "post": {
-        "operationId": "KebeleReviewController_reject",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/KebeleRejectDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Reject a farmer demand (reason required, e-signature)",
-        "tags": [
-          "Kebele review (REQ-1.1-007)"
-        ]
-      }
-    },
-    "/api/kebele/farmers/{id}/request-revision": {
-      "post": {
-        "operationId": "KebeleReviewController_requestRevision",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/KebeleRevisionDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Return a farmer demand to the DA for revision (comments required, e-signature)",
-        "tags": [
-          "Kebele review (REQ-1.1-007)"
-        ]
-      }
-    },
-    "/api/kebele/farmers/{id}/partial": {
-      "post": {
-        "operationId": "KebeleReviewController_partial",
-        "parameters": [
-          {
-            "name": "id",
-            "required": true,
-            "in": "path",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/KebelePartialDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Partial approval: approve some fertilizer lines, request revision of others",
-        "tags": [
-          "Kebele review (REQ-1.1-007)"
-        ]
-      }
-    },
-    "/api/kebele/bulk": {
-      "post": {
-        "operationId": "KebeleReviewController_bulk",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/KebeleBulkDto"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": ""
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ],
-        "summary": "Bulk approve/reject/return (max 100, same kebele & season, one signature; skips warnings unless includeWarnings)",
-        "tags": [
-          "Kebele review (REQ-1.1-007)"
-        ]
-      }
-    },
     "/api/aggregation/drilldown": {
       "get": {
         "operationId": "AggregationController_drilldown",
@@ -3376,6 +3170,212 @@
         "summary": "Approve & forward / return / partial approve / hold / dispute (e-signature required)",
         "tags": [
           "Woreda & Zone Review (REQ-1.2-002/003/004)"
+        ]
+      }
+    },
+    "/api/kebele/queue": {
+      "get": {
+        "operationId": "KebeleReviewController_queue",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Kebele dashboard: farmers in scope + pending/flagged/arrears statistics",
+        "tags": [
+          "Kebele review (REQ-1.1-007)"
+        ]
+      }
+    },
+    "/api/kebele/farmers/{id}/approve": {
+      "post": {
+        "operationId": "KebeleReviewController_approve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KebeleApproveDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Approve a farmer demand (e-signature; optional per-type approvedQtl)",
+        "tags": [
+          "Kebele review (REQ-1.1-007)"
+        ]
+      }
+    },
+    "/api/kebele/farmers/{id}/reject": {
+      "post": {
+        "operationId": "KebeleReviewController_reject",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KebeleRejectDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reject a farmer demand (reason required, e-signature)",
+        "tags": [
+          "Kebele review (REQ-1.1-007)"
+        ]
+      }
+    },
+    "/api/kebele/farmers/{id}/request-revision": {
+      "post": {
+        "operationId": "KebeleReviewController_requestRevision",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KebeleRevisionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Return a farmer demand to the DA for revision (comments required, e-signature)",
+        "tags": [
+          "Kebele review (REQ-1.1-007)"
+        ]
+      }
+    },
+    "/api/kebele/farmers/{id}/partial": {
+      "post": {
+        "operationId": "KebeleReviewController_partial",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KebelePartialDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Partial approval: approve some fertilizer lines, request revision of others",
+        "tags": [
+          "Kebele review (REQ-1.1-007)"
+        ]
+      }
+    },
+    "/api/kebele/bulk": {
+      "post": {
+        "operationId": "KebeleReviewController_bulk",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KebeleBulkDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Bulk approve/reject/return (max 100, same kebele & season, one signature; skips warnings unless includeWarnings)",
+        "tags": [
+          "Kebele review (REQ-1.1-007)"
         ]
       }
     },
@@ -13471,213 +13471,6 @@
           "landCertNumber"
         ]
       },
-      "KebeleApproveDto": {
-        "type": "object",
-        "properties": {
-          "pin": {
-            "type": "string",
-            "example": "1234",
-            "description": "E-signature PIN"
-          },
-          "password": {
-            "type": "string",
-            "description": "Account password (alternative to PIN)"
-          },
-          "comments": {
-            "type": "string"
-          },
-          "approvedQtl": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "number"
-            },
-            "example": {
-              "NPSB": 7.5,
-              "UREA": 9
-            },
-            "description": "Approved quintals per fertilizer type (defaults to min(requested, recommended))"
-          }
-        }
-      },
-      "KebeleRejectDto": {
-        "type": "object",
-        "properties": {
-          "pin": {
-            "type": "string",
-            "example": "1234",
-            "description": "E-signature PIN"
-          },
-          "password": {
-            "type": "string",
-            "description": "Account password (alternative to PIN)"
-          },
-          "reason": {
-            "type": "string",
-            "minLength": 3,
-            "example": "Land certificate does not match the holder"
-          }
-        },
-        "required": [
-          "reason"
-        ]
-      },
-      "KebeleRevisionDto": {
-        "type": "object",
-        "properties": {
-          "pin": {
-            "type": "string",
-            "example": "1234",
-            "description": "E-signature PIN"
-          },
-          "password": {
-            "type": "string",
-            "description": "Account password (alternative to PIN)"
-          },
-          "comments": {
-            "type": "string",
-            "minLength": 3,
-            "example": "Please re-measure the plot size"
-          },
-          "types": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "enum": [
-                "NPS",
-                "NPSB",
-                "UREA",
-                "DAP",
-                "NPK_ZN",
-                "OTHER"
-              ]
-            }
-          }
-        },
-        "required": [
-          "comments"
-        ]
-      },
-      "PartialApproveLineDto": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "enum": [
-              "NPS",
-              "NPSB",
-              "UREA",
-              "DAP",
-              "NPK_ZN",
-              "OTHER"
-            ]
-          },
-          "approvedQtl": {
-            "type": "number",
-            "minimum": 0
-          }
-        },
-        "required": [
-          "type"
-        ]
-      },
-      "PartialReviseLineDto": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "enum": [
-              "NPS",
-              "NPSB",
-              "UREA",
-              "DAP",
-              "NPK_ZN",
-              "OTHER"
-            ]
-          },
-          "comment": {
-            "type": "string",
-            "minLength": 3
-          }
-        },
-        "required": [
-          "type",
-          "comment"
-        ]
-      },
-      "KebelePartialDto": {
-        "type": "object",
-        "properties": {
-          "pin": {
-            "type": "string",
-            "example": "1234",
-            "description": "E-signature PIN"
-          },
-          "password": {
-            "type": "string",
-            "description": "Account password (alternative to PIN)"
-          },
-          "approve": {
-            "minItems": 1,
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PartialApproveLineDto"
-            }
-          },
-          "revise": {
-            "minItems": 1,
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PartialReviseLineDto"
-            }
-          }
-        },
-        "required": [
-          "approve",
-          "revise"
-        ]
-      },
-      "KebeleBulkDto": {
-        "type": "object",
-        "properties": {
-          "pin": {
-            "type": "string",
-            "example": "1234",
-            "description": "E-signature PIN"
-          },
-          "password": {
-            "type": "string",
-            "description": "Account password (alternative to PIN)"
-          },
-          "action": {
-            "default": "APPROVE",
-            "enum": [
-              "APPROVE",
-              "REJECT",
-              "REQUEST_REVISION"
-            ],
-            "type": "string"
-          },
-          "farmerIds": {
-            "description": "Max 100; omitted = all pending in your kebele",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "reason": {
-            "type": "string",
-            "minLength": 3,
-            "example": "Seasonal batch approval"
-          },
-          "includeWarnings": {
-            "type": "boolean",
-            "default": false
-          }
-        },
-        "required": [
-          "reason"
-        ]
-      },
       "CreateAdjustmentDto": {
         "type": "object",
         "properties": {
@@ -13921,6 +13714,213 @@
         },
         "required": [
           "action"
+        ]
+      },
+      "KebeleApproveDto": {
+        "type": "object",
+        "properties": {
+          "pin": {
+            "type": "string",
+            "example": "1234",
+            "description": "E-signature PIN"
+          },
+          "password": {
+            "type": "string",
+            "description": "Account password (alternative to PIN)"
+          },
+          "comments": {
+            "type": "string"
+          },
+          "approvedQtl": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            },
+            "example": {
+              "NPSB": 7.5,
+              "UREA": 9
+            },
+            "description": "Approved quintals per fertilizer type (defaults to min(requested, recommended))"
+          }
+        }
+      },
+      "KebeleRejectDto": {
+        "type": "object",
+        "properties": {
+          "pin": {
+            "type": "string",
+            "example": "1234",
+            "description": "E-signature PIN"
+          },
+          "password": {
+            "type": "string",
+            "description": "Account password (alternative to PIN)"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "example": "Land certificate does not match the holder"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "KebeleRevisionDto": {
+        "type": "object",
+        "properties": {
+          "pin": {
+            "type": "string",
+            "example": "1234",
+            "description": "E-signature PIN"
+          },
+          "password": {
+            "type": "string",
+            "description": "Account password (alternative to PIN)"
+          },
+          "comments": {
+            "type": "string",
+            "minLength": 3,
+            "example": "Please re-measure the plot size"
+          },
+          "types": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "NPS",
+                "NPSB",
+                "UREA",
+                "DAP",
+                "NPK_ZN",
+                "OTHER"
+              ]
+            }
+          }
+        },
+        "required": [
+          "comments"
+        ]
+      },
+      "PartialApproveLineDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "NPS",
+              "NPSB",
+              "UREA",
+              "DAP",
+              "NPK_ZN",
+              "OTHER"
+            ]
+          },
+          "approvedQtl": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "PartialReviseLineDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "NPS",
+              "NPSB",
+              "UREA",
+              "DAP",
+              "NPK_ZN",
+              "OTHER"
+            ]
+          },
+          "comment": {
+            "type": "string",
+            "minLength": 3
+          }
+        },
+        "required": [
+          "type",
+          "comment"
+        ]
+      },
+      "KebelePartialDto": {
+        "type": "object",
+        "properties": {
+          "pin": {
+            "type": "string",
+            "example": "1234",
+            "description": "E-signature PIN"
+          },
+          "password": {
+            "type": "string",
+            "description": "Account password (alternative to PIN)"
+          },
+          "approve": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartialApproveLineDto"
+            }
+          },
+          "revise": {
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PartialReviseLineDto"
+            }
+          }
+        },
+        "required": [
+          "approve",
+          "revise"
+        ]
+      },
+      "KebeleBulkDto": {
+        "type": "object",
+        "properties": {
+          "pin": {
+            "type": "string",
+            "example": "1234",
+            "description": "E-signature PIN"
+          },
+          "password": {
+            "type": "string",
+            "description": "Account password (alternative to PIN)"
+          },
+          "action": {
+            "default": "APPROVE",
+            "enum": [
+              "APPROVE",
+              "REJECT",
+              "REQUEST_REVISION"
+            ],
+            "type": "string"
+          },
+          "farmerIds": {
+            "description": "Max 100; omitted = all pending in your kebele",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 3,
+            "example": "Seasonal batch approval"
+          },
+          "includeWarnings": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "reason"
         ]
       },
       "SubmitRegionDto": {

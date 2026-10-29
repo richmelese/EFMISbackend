@@ -3,22 +3,24 @@ import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import { DemandAdjustment } from './entities/demand-adjustment.entity';
 import { Farmer } from '../farmers/entities/farmer.entity';
-import { Kebele } from '../hierarchy/entities/kebele.entity';
-import { Woreda } from '../hierarchy/entities/woreda.entity';
-import { Zone } from '../hierarchy/entities/zone.entity';
+import { Kebele } from '../admin-units/entities/kebele.entity';
+import { Woreda } from '../admin-units/entities/woreda.entity';
+import { Zone } from '../admin-units/entities/zone.entity';
 import { can, Permission } from '../../common/constants/permissions';
 import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { Errors } from '../../common/utils/errors';
 import { fmtMT, round, stamp } from '../../common/utils/helpers';
 import { assertInScope, assertUnitVisible, scopeCondition } from '../../common/utils/scope';
-import { HierarchyService } from '../hierarchy/hierarchy.service';
+import { HierarchyService } from '../admin-units/hierarchy.service';
+import { AdminUnitsService } from '../admin-units/admin-units.service';
 import { AggregationService } from '../aggregation/aggregation.service';
 import { AuditService } from '../audit/audit.service';
 import { SignaturesService } from '../signatures/signatures.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { AlertsService } from '../alerts/alerts.service';
 import { CommentsService } from '../comments/comments.service';
-import { ApprovalsService } from '../approvals/approvals.service';
+import { ApprovalsService } from '../workflow/approvals.service';
+import { WorkflowService } from '../workflow/workflow.service';
 import { AdjustmentQueryDto, CreateAdjustmentDto, CreateCommentDto, DecisionDto, ScenarioDto } from './dto/reviews.dto';
 
 interface LevelConfig {
@@ -58,13 +60,15 @@ export class ReviewsService {
     @InjectDataSource() private readonly ds: DataSource,
     @InjectRepository(DemandAdjustment) private readonly adjustments: Repository<DemandAdjustment>,
     private readonly hierarchy: HierarchyService,
+    private readonly adminUnits: AdminUnitsService,
     private readonly aggregation: AggregationService,
     private readonly audit: AuditService,
     private readonly signatures: SignaturesService,
     private readonly notifications: NotificationsService,
     private readonly alerts: AlertsService,
     private readonly comments: CommentsService,
-    private readonly approvals: ApprovalsService
+    private readonly approvals: ApprovalsService,
+    private readonly workflow: WorkflowService
   ) {}
 
   private resolveLevel(level: string): LevelConfig {
@@ -78,7 +82,7 @@ export class ReviewsService {
       ? await this.hierarchy.woredas.findOne({ where: { id: unitId } })
       : await this.hierarchy.zones.findOne({ where: { id: unitId } });
     if (!unit) throw Errors.notFound(cfg.label);
-    assertInScope(user, await this.hierarchy.unitRef(cfg.entity, unitId), 'unit');
+    assertInScope(user, await this.adminUnits.unitRef(unit.id), 'unit');
     return unit;
   }
 
@@ -114,7 +118,7 @@ export class ReviewsService {
         .orWhere('(a.unitId IS NULL AND a.level = :lvl)', { lvl: cfg.entity })
         .orderBy('a.id', 'ASC').getMany()
       : [];
-    const decisions = await this.approvals.history(cfg.entity, unit.id);
+    const decisions = await this.workflow.history(cfg.entity, unit.id);
     const statusCount = (s: string) => children.filter(c => c.status === s).length;
     return {
       ...drill,
@@ -137,7 +141,7 @@ export class ReviewsService {
     const qb = this.adjustments.createQueryBuilder('a').where(s.sql, s.params);
     if (q.level) qb.andWhere('a.level = :level', { level: String(q.level).toUpperCase() });
     if (q.unitId) {
-      const unit = await this.hierarchy.adminUnits.unitRef(q.unitId);
+      const unit = await this.adminUnits.unitRef(q.unitId);
       if (unit) assertInScope(user, unit, 'unit');
       qb.andWhere('a.unitId = :unitId', { unitId: q.unitId });
     }
@@ -156,12 +160,12 @@ export class ReviewsService {
       if (level === 'WOREDA') {
         const k = await m.getRepository(Kebele).findOne({ where: { id: dto.unitId } });
         if (!k) throw Errors.notFound('Kebele');
-        assertInScope(user, await this.hierarchy.unitRef('KEBELE', k.id), 'kebele');
+        assertInScope(user, await this.adminUnits.unitRef(k.id), 'kebele');
         unit = k; unitType = 'KEBELE'; rawMT = k.demandMt;
       } else {
         const w = await m.getRepository(Woreda).findOne({ where: { id: dto.unitId } });
         if (!w) throw Errors.notFound('Woreda');
-        assertInScope(user, await this.hierarchy.unitRef('WOREDA', w.id), 'woreda');
+        assertInScope(user, await this.adminUnits.unitRef(w.id), 'woreda');
         unit = w; unitType = 'WOREDA';
         const r = await m.getRepository(Kebele).createQueryBuilder('k').select('COALESCE(SUM(k.demandMt),0)', 's').where('k.woredaId = :id', { id: w.id }).getRawOne();
         rawMT = Number(r?.s) || 0;

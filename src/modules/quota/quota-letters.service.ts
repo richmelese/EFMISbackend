@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
 import { PurchaseOrder, QuotaAllocation, QuotaLetter } from './entities/quota.entities';
-import { Region } from '../hierarchy/entities/region.entity';
+import { Region } from '../admin-units/entities/region.entity';
 import { DemandDocument } from '../national/entities/demand-document.entities';
 import { Signature } from '../signatures/entities/signature.entity';
 import { RULES } from '../../common/constants/rules';
