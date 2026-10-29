@@ -916,13 +916,27 @@
             "required": false,
             "in": "query",
             "schema": {
+              "enum": [
+                "true",
+                "false"
+              ],
               "type": "string"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationDto"
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -942,7 +956,14 @@
         "parameters": [],
         "responses": {
           "201": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkDto"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -950,6 +971,7 @@
             "bearer": []
           }
         ],
+        "summary": "Mark all my notifications read",
         "tags": [
           "Notifications"
         ]
@@ -970,7 +992,14 @@
         ],
         "responses": {
           "201": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkDto"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -978,6 +1007,7 @@
             "bearer": []
           }
         ],
+        "summary": "Mark one notification read",
         "tags": [
           "Notifications"
         ]
@@ -3161,7 +3191,17 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CommentDto"
+                  }
+                }
+              }
+            }
           }
         },
         "security": [
@@ -3189,7 +3229,14 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddedCommentDto"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -12351,6 +12398,52 @@
           "expiresAt"
         ]
       },
+      "NotificationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "title": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "link": {
+            "type": "string",
+            "nullable": true,
+            "description": "In-app route to open, e.g. /workflow/cases/WFC-…"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-10-29 10:15:00"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "message",
+          "link",
+          "read",
+          "createdAt"
+        ]
+      },
+      "OkDto": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "ok"
+        ]
+      },
       "CreateAlertDto": {
         "type": "object",
         "properties": {
@@ -13615,6 +13708,49 @@
           "justification"
         ]
       },
+      "CommentDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "author": {
+            "type": "string",
+            "description": "Author display name"
+          },
+          "text": {
+            "type": "string"
+          },
+          "time": {
+            "type": "string",
+            "example": "14:20"
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-10-29 14:20:00"
+          },
+          "parentId": {
+            "type": "number",
+            "nullable": true
+          },
+          "mentions": {
+            "description": "Names of users @mentioned (they are notified)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "author",
+          "text",
+          "time",
+          "createdAt",
+          "parentId",
+          "mentions"
+        ]
+      },
       "CreateCommentDto": {
         "type": "object",
         "properties": {
@@ -13649,6 +13785,53 @@
           "scopeType",
           "scopeId",
           "text"
+        ]
+      },
+      "AddedCommentDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "author": {
+            "type": "string",
+            "description": "Author display name"
+          },
+          "text": {
+            "type": "string"
+          },
+          "time": {
+            "type": "string",
+            "example": "14:20"
+          },
+          "createdAt": {
+            "type": "string",
+            "example": "2026-10-29 14:20:00"
+          },
+          "parentId": {
+            "type": "number",
+            "nullable": true
+          },
+          "mentions": {
+            "description": "Names of users @mentioned (they are notified)",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "author",
+          "text",
+          "time",
+          "createdAt",
+          "parentId",
+          "mentions",
+          "message"
         ]
       },
       "ScenarioAdjustmentDto": {

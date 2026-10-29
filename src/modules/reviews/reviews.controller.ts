@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { AddedCommentDto, CommentDto } from '../comments/dto/comment.dto';
 import { CurrentUser, ReqCtx, RequirePermissions } from '../../common/decorators';
 import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { AdjustmentQueryDto, CommentQueryDto, CreateAdjustmentDto, CreateCommentDto, DecisionDto, ScenarioDto } from './dto/reviews.dto';
@@ -30,6 +31,7 @@ export class ReviewsController {
   @Get('comments')
   @RequirePermissions('aggregation:read', 'alerts:read')
   @ApiOperation({ summary: 'Comment thread for a scope (scopeType, scopeId)' })
+  @ApiOkResponse({ type: CommentDto, isArray: true })
   listComments(@Query() q: CommentQueryDto, @CurrentUser() user: AuthUser) {
     return this.reviews.listComments(q.scopeType, q.scopeId, user);
   }
@@ -37,6 +39,7 @@ export class ReviewsController {
   @Post('comments')
   @RequirePermissions('review:comment', 'ftwg:participate', 'alerts:manage')
   @ApiOperation({ summary: 'Add a comment (@mentions notify users)' })
+  @ApiCreatedResponse({ type: AddedCommentDto })
   addComment(@Body() dto: CreateCommentDto, @CurrentUser() user: AuthUser, @ReqCtx() ctx: RequestContext) {
     return this.reviews.addComment(dto, user, ctx);
   }
