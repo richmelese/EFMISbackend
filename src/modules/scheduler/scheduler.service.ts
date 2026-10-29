@@ -11,6 +11,8 @@ import { AlertsService } from '../alerts/alerts.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { SettingsService } from '../settings/settings.service';
 import { AuthService } from '../auth/auth.service';
+import { WorkflowService } from '../workflow/workflow.service';
+import { OutboxService } from '../outbox/outbox.service';
 
 export interface SchedulerSummary {
   kebeleEscalations: number;
@@ -20,6 +22,9 @@ export interface SchedulerSummary {
   poEscalations: number;
   slaEscalations: number;
   unsnoozed: number;
+  workflowReminders: number;
+  workflowEscalations: number;
+  outboxAckOverdue: number;
 }
 
 const age = (d: Date | string) => daysSince(typeof d === 'string' ? parseStamp(d) : d);
@@ -31,6 +36,7 @@ const age = (d: Date | string) => daysSince(typeof d === 'string' ? parseStamp(d
  *  - REQ-1.4-006: quota letter acknowledgement reminders / escalation
  *  - REQ-1.4-010: escalate if EABC has not acknowledged a procurement request within 48 h
  *  - REQ-INT-005: unacknowledged Critical/High alerts past SLA escalate to PMO; snoozed alerts re-open
+ *  - workflow cases past due_at: escalation / reminders as their definition says (WorkflowService.processDeadlines)
  * Reminder/escalation notifications go out once per day; alerts are de-duplicated by dedupeKey.
  */
 @Injectable()
@@ -48,7 +54,9 @@ export class SchedulerService {
     private readonly alerts: AlertsService,
     private readonly notifications: NotificationsService,
     private readonly settings: SettingsService,
-    private readonly auth: AuthService
+    private readonly auth: AuthService,
+    private readonly workflow: WorkflowService,
+    private readonly outbox: OutboxService
   ) {}
 
   @Cron(CronExpression.EVERY_HOUR, { name: 'efmis-workflow-scheduler' })
@@ -72,7 +80,7 @@ export class SchedulerService {
   }
 
   private async execute(): Promise<SchedulerSummary> {
-    const summary: SchedulerSummary = { kebeleEscalations: 0, reminders: 0, signatureEscalations: 0, letterReminders: 0, poEscalations: 0, slaEscalations: 0, unsnoozed: 0 };
+    const summary: SchedulerSummary = { kebeleEscalations: 0, reminders: 0, signatureEscalations: 0, letterReminders: 0, poEscalations: 0, slaEscalations: 0, unsnoozed: 0, workflowReminders: 0, workflowEscalations: 0, outboxAckOverdue: 0 };
     const escalationDays = Number(await this.settings.get('kebeleEscalationDays', this.config.get<number>('kebeleEscalationDays') ?? 7)) || 7;
     const today = nowStamp().slice(0, 10);
     const lastRun = await this.settings.get<any>('schedulerLastRun', null);
@@ -165,6 +173,14 @@ export class SchedulerService {
         summary.unsnoozed++;
       }
     }
+
+    // ---- Workflow cases past their deadline: escalation up the unit chain, or daily reminders
+    const wf = await this.workflow.processDeadlines(now);
+    summary.workflowReminders = wf.reminders;
+    summary.workflowEscalations = wf.escalations;
+
+    // ---- Outgoing messages whose receiver has not acknowledged in time
+    summary.outboxAckOverdue = await this.outbox.checkAckOverdue(now);
 
     // ---- Housekeeping: expired revoked tokens and OTP codes
     await this.auth.purgeExpired();

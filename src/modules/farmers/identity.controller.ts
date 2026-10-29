@@ -4,6 +4,8 @@ import type { Response } from 'express';
 import { CurrentUser, ReqCtx, RequirePermissions } from '../../common/decorators';
 import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { Errors } from '../../common/utils/errors';
+import { assertUnitVisible } from '../../common/utils/scope';
+import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { AuditService } from '../audit/audit.service';
 import { ExternalService, FAYDA_MESSAGES } from '../external/external.service';
 import { FaydaVerifyDto, NrlaisVerifyDto } from './dto/identity.dto';
@@ -17,7 +19,8 @@ export class IdentityController {
   constructor(
     private readonly external: ExternalService,
     private readonly farmers: FarmersService,
-    private readonly audit: AuditService
+    private readonly audit: AuditService,
+    private readonly hierarchy: HierarchyService
   ) {}
 
   @Post('fayda/verify')
@@ -48,7 +51,9 @@ export class IdentityController {
   @Get('nsis/:regionId')
   @RequirePermissions('region:analyze', 'farmers:read')
   @ApiOperation({ summary: 'NSIS soil profile of a region (cached)' })
-  async nsis(@Param('regionId') regionId: string) {
+  async nsis(@Param('regionId') regionId: string, @CurrentUser() user: AuthUser) {
+    const region = await this.hierarchy.unitRef('REGION', regionId);
+    if (region) assertUnitVisible(user, region, 'region');
     const p = await this.external.nsisProfile(regionId);
     if (!p) throw Errors.notFound('NSIS profile');
     return p;

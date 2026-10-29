@@ -96,7 +96,7 @@ export class KebeleReviewService {
   // ------------------------------------------------------------------ dashboard
 
   async queue(user: AuthUser) {
-    const s = scopeCondition(user, 'f');
+    const s = scopeCondition(user, 'f', 'kebeleId');
     const rows = await this.farmers.repo.createQueryBuilder('f').leftJoinAndSelect('f.demands', 'd')
       .where('f.deleted = false').andWhere(s.sql, s.params)
       .orderBy('f.submissionDate', 'ASC').addOrderBy('f.id', 'ASC').addOrderBy('d.id', 'ASC').getMany();
@@ -199,7 +199,7 @@ export class KebeleReviewService {
   /** Bulk operations: max 100 records, same kebele & season, common reason, one signature for the batch. */
   async bulk(user: AuthUser, dto: KebeleBulkDto, ctx: RequestContext) {
     const action = dto.action || 'APPROVE';
-    const s = scopeCondition(user, 'f');
+    const s = scopeCondition(user, 'f', 'kebeleId');
     const ids = dto.farmerIds;
 
     return this.ds.transaction(async m => {

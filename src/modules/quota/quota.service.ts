@@ -6,7 +6,9 @@ import { RULES } from '../../common/constants/rules';
 import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { Errors } from '../../common/utils/errors';
 import { fmtMT, round, shortId, stamp } from '../../common/utils/helpers';
-import { isNational } from '../../common/utils/scope';
+import { assertInScope, assertUnitVisible, isNational, UnitRef, unitVisible } from '../../common/utils/scope';
+import { AdminUnitsService } from '../admin-units/admin-units.service';
+import { ltreeLabel } from '../admin-units/admin-unit-backfill';
 import { AuditService } from '../audit/audit.service';
 import { SignaturesService } from '../signatures/signatures.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -39,7 +41,8 @@ export class QuotaService {
     private readonly audit: AuditService,
     private readonly signatures: SignaturesService,
     private readonly notifications: NotificationsService,
-    private readonly alerts: AlertsService
+    private readonly alerts: AlertsService,
+    private readonly adminUnits: AdminUnitsService
   ) {}
 
   // ---------------- Shapes ----------------
@@ -81,10 +84,45 @@ export class QuotaService {
     };
   }
 
-  // ---------------- Helpers ----------------
-  private visible(user: AuthUser, a: QuotaAllocation): boolean {
-    return isNational(user) || a.regionId === user.regionId;
+  // ---------------- Scope ----------------
+  /**
+   * Where each line sits in the unit tree: its unit's admin_units path; for a unit not in the tree yet (PCs, …) the
+   * parent line's path extended by the unit id. Lines without either fall back to their region.
+   */
+  private async scopeRefs(rows: QuotaAllocation[], manager?: EntityManager): Promise<Map<string, UnitRef>> {
+    const regionIds = [...new Set(rows.map(a => a.regionId))];
+    const all = regionIds.length ? await (manager ? manager.getRepository(QuotaAllocation) : this.allocations).find({ where: { regionId: In(regionIds) } }) : [];
+    const byId = new Map([...all, ...rows].map(a => [a.id, a]));
+    const unitPaths = new Map((await this.adminUnits.byIds([...new Set(all.map(a => a.unitId).filter((u): u is string => !!u))], manager)).map(u => [u.id, u.path]));
+    const paths = new Map<string, string | null>();
+    const pathOf = (a: QuotaAllocation, depth = 0): string | null => {
+      if (!paths.has(a.id)) {
+        const parent = a.parentId ? byId.get(a.parentId) : undefined;
+        const up = parent && depth < LEVEL_ORDER.length ? pathOf(parent, depth + 1) : null;
+        const own = a.unitId ? unitPaths.get(a.unitId) : undefined;
+        paths.set(a.id, own ?? (up && a.unitId ? `${up}.${ltreeLabel(a.unitId)}` : up));
+      }
+      return paths.get(a.id)!;
+    };
+    return new Map(rows.map(a => [a.id, { regionId: a.regionId, path: pathOf(a) }]));
   }
+
+  /** Lines inside the user's unit, plus the lines above it that its quota comes from. */
+  private async visibleOnly(user: AuthUser, rows: QuotaAllocation[]): Promise<QuotaAllocation[]> {
+    if (isNational(user)) return rows;
+    const refs = await this.scopeRefs(rows);
+    return rows.filter(a => unitVisible(user, refs.get(a.id)!));
+  }
+
+  /** Reading a line: inside or above the user's unit. Acting on it (`act`): inside the user's unit. */
+  private async assertAllocationScope(user: AuthUser, a: QuotaAllocation, act: boolean, manager?: EntityManager) {
+    if (isNational(user)) return;
+    const ref = (await this.scopeRefs([a], manager)).get(a.id)!;
+    if (act) assertInScope(user, ref, 'quota allocation');
+    else assertUnitVisible(user, ref, 'quota allocation');
+  }
+
+  // ---------------- Helpers ----------------
 
   async getAllocation(id: string, manager?: EntityManager): Promise<QuotaAllocation> {
     const a = await (manager ? manager.getRepository(QuotaAllocation) : this.allocations).findOneBy({ id });
@@ -158,19 +196,19 @@ export class QuotaService {
     if (f.regionId) where.regionId = f.regionId;
     if (f.status) where.status = f.status;
     const rows = await this.allocations.find({ where, order: { sort: 'ASC', createdAt: 'ASC' } });
-    return rows.filter(a => this.visible(user, a)).map(a => this.allocationToFrontend(a, lang));
+    return (await this.visibleOnly(user, rows)).map(a => this.allocationToFrontend(a, lang));
   }
 
   /** The "Downward Primary Coop Dispatch" table: everything below the regional line */
   async downward(user: AuthUser, regionIdQ?: string, lang?: string) {
     const regionId = regionIdQ || user.regionId || 'REG-OROMIA';
     const rows = await this.allocations.find({ where: { regionId, level: Not('REGION') }, order: { sort: 'ASC', createdAt: 'ASC' } });
-    return rows.filter(a => this.visible(user, a)).map(a => this.allocationToFrontend(a, lang));
+    return (await this.visibleOnly(user, rows)).map(a => this.allocationToFrontend(a, lang));
   }
 
   async detail(user: AuthUser, id: string, lang?: string) {
     const a = await this.getAllocation(id);
-    if (!this.visible(user, a)) throw Errors.forbidden();
+    await this.assertAllocationScope(user, a, false);
     const children = await this.allocations.find({ where: { parentId: a.id }, order: { sort: 'ASC', createdAt: 'ASC' } });
     const amendments = await this.amendments.find({ where: { allocationId: a.id }, order: { createdAt: 'ASC' } });
     return {
@@ -182,13 +220,15 @@ export class QuotaService {
     };
   }
 
-  async recommendation(id: string) {
-    return this.recommendChildren(await this.getAllocation(id));
+  async recommendation(user: AuthUser, id: string) {
+    const a = await this.getAllocation(id);
+    await this.assertAllocationScope(user, a, false);
+    return this.recommendChildren(a);
   }
 
   async createChild(user: AuthUser, parentId: string, dto: CreateChildAllocationDto, ctx: RequestContext) {
     const parent = await this.getAllocation(parentId);
-    if (!this.visible(user, parent)) throw Errors.forbidden();
+    await this.assertAllocationScope(user, parent, true);
     if (!['MOA', 'ADMIN'].includes(user.role) && OWNER_ROLE[parent.level] !== user.role) throw Errors.forbidden(`Only the ${parent.level} level can allocate below this line`);
     if (parent.approvalStatus !== 'APPROVED') throw Errors.conflict('Parent allocation must be approved before allocating downwards');
     const level = this.childLevel(parent.level);
@@ -222,7 +262,7 @@ export class QuotaService {
   /** Each level approves (e-signs) its own allocation */
   async approve(user: AuthUser, id: string, cred: { pin?: string; password?: string }, ctx: RequestContext) {
     const a = await this.getAllocation(id);
-    if (!this.visible(user, a)) throw Errors.forbidden();
+    await this.assertAllocationScope(user, a, true);
     if (a.approvalStatus === 'APPROVED') throw Errors.conflict('Allocation already approved');
     const allowed = ['MOA', 'ADMIN'].includes(user.role) || user.role === a.level || (a.level === 'PC' && user.role === 'KEBELE');
     if (!allowed) throw Errors.forbidden(`Only the ${a.level} level can approve this allocation`);
@@ -238,7 +278,7 @@ export class QuotaService {
   /** Downstream acknowledgement of receipt of the allocation */
   async acknowledge(user: AuthUser, id: string, ctx: RequestContext) {
     const a = await this.getAllocation(id);
-    if (!this.visible(user, a)) throw Errors.forbidden();
+    await this.assertAllocationScope(user, a, true);
     await this.ds.transaction(async m => {
       await m.getRepository(QuotaAllocation).update({ id: a.id }, { acknowledgedAt: new Date(), acknowledgedBy: user.name });
       await this.audit.record(user, 'QUOTA_ALLOCATION_ACKNOWLEDGED', a.id, null, ctx, m);
@@ -249,6 +289,7 @@ export class QuotaService {
   /** Delivery tracking updates (logistics feeds); a delivered-quantity mismatch raises a reconciliation alert. */
   async updateDelivery(user: AuthUser, id: string, dto: DeliveryUpdateDto, ctx: RequestContext) {
     const a = await this.getAllocation(id);
+    await this.assertAllocationScope(user, a, true);
     const received = dto.receivedMT ?? a.receivedMt;
     const total = a.npsbMt + a.ureaMt + a.otherMt;
     const status = dto.status || (received >= total ? 'Delivered' : received > 0 ? 'Partially Delivered' : a.status);
@@ -280,16 +321,15 @@ export class QuotaService {
 
   // ---------------- Amendments (REQ-1.4-009) ----------------
   async listAmendments(user: AuthUser, status?: string) {
-    const qb = this.amendments.createQueryBuilder('m').innerJoin(QuotaAllocation, 'a', 'a.id = m.allocationId');
-    if (status) qb.andWhere('m.status = :status', { status });
-    if (!isNational(user)) qb.andWhere('a.regionId = :rid', { rid: user.regionId ?? '' });
-    const rows = await qb.orderBy('m.createdAt', 'DESC').getMany();
-    return rows.map(m => this.amendmentToFrontend(m));
+    const rows = await this.amendments.find({ where: status ? { status } : {}, order: { createdAt: 'DESC' } });
+    const lines = await this.visibleOnly(user, rows.length ? await this.allocations.findBy({ id: In([...new Set(rows.map(m => m.allocationId))]) }) : []);
+    const visible = new Set(lines.map(a => a.id));
+    return rows.filter(m => visible.has(m.allocationId)).map(m => this.amendmentToFrontend(m));
   }
 
   async createAmendment(user: AuthUser, allocationId: string, dto: CreateAmendmentDto, ctx: RequestContext) {
     const a = await this.getAllocation(allocationId);
-    if (!this.visible(user, a)) throw Errors.forbidden();
+    await this.assertAllocationScope(user, a, true);
     const before = this.stateOf(a);
     const changes = Object.fromEntries(Object.entries(dto.proposed || {}).filter(([, v]) => v !== undefined));
     const proposed = { ...before, ...changes };
@@ -340,6 +380,7 @@ export class QuotaService {
     if (!m0) throw Errors.notFound('Amendment');
     if (m0.status !== 'PENDING_APPROVAL') throw Errors.conflict(`Amendment is ${m0.status}`);
     const a = await this.getAllocation(m0.allocationId);
+    await this.assertAllocationScope(user, a, true);
     if (!(await this.canAuthorize(user, a))) throw Errors.forbidden('Amendments require approval from the original authorising level (or higher)');
     if (!dto.approve && !dto.comments) throw Errors.badRequest('Comments are required when rejecting an amendment');
     await this.ds.transaction(async m => {

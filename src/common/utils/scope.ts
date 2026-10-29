@@ -1,39 +1,86 @@
 import { NATIONAL_ROLES } from '../constants/permissions';
-import { AuthUser } from '../types/auth-user';
+import { AdministrativeScope, AuthUser } from '../types/auth-user';
 import { Errors } from './errors';
 
+/**
+ * Where a record sits in the unit tree. Records carry the legacy chain columns (regionId … kebeleId); `path` is the
+ * record unit's admin_units.path when the caller already has it.
+ */
 export interface UnitRef {
   regionId?: string | null;
   zoneId?: string | null;
   woredaId?: string | null;
   kebeleId?: string | null;
+  path?: string | null;
 }
-
-export const isNational = (user: AuthUser): boolean => NATIONAL_ROLES.includes(user.role);
 
 /**
- * TypeORM where-fragment restricting rows to the user's administrative area (data segmentation, REQ-1.7-001).
- * Entity `alias` must have regionId / zoneId / woredaId / kebeleId properties.
- * Usage: qb.andWhere(s.sql, s.params)
+ * Data segmentation (REQ-1.7-001) is one rule: a record is in scope when its unit is inside the user's unit
+ * (`admin_units.path <@ userUnit.path`). National roles see everything. Every module scopes through these helpers.
  */
-export function scopeCondition(user: AuthUser, alias: string): { sql: string; params: Record<string, unknown> } {
-  if (isNational(user)) return { sql: '1=1', params: {} };
-  if (user.kebeleId && ['DA', 'KEBELE'].includes(user.role)) return { sql: `${alias}.kebeleId = :scopeId`, params: { scopeId: user.kebeleId } };
-  if (user.woredaId && user.role === 'WOREDA') return { sql: `${alias}.woredaId = :scopeId`, params: { scopeId: user.woredaId } };
-  if (user.zoneId && user.role === 'ZONE') return { sql: `${alias}.zoneId = :scopeId`, params: { scopeId: user.zoneId } };
-  if (user.regionId) return { sql: `${alias}.regionId = :scopeId`, params: { scopeId: user.regionId } };
-  return { sql: '1=0', params: {} };
+export const isNational = (user: Pick<AuthUser, 'role'>): boolean => NATIONAL_ROLES.includes(user.role);
+
+/** The unit a base role's data scope is anchored at (stored as users.admin_unit_id). */
+export function scopeUnitId(baseRole: string, s: Partial<AdministrativeScope>): string | null {
+  if (['DA', 'KEBELE'].includes(baseRole) && s.kebeleId) return s.kebeleId;
+  if (baseRole === 'WOREDA' && s.woredaId) return s.woredaId;
+  if (baseRole === 'ZONE' && s.zoneId) return s.zoneId;
+  return s.regionId ?? null;
 }
 
+const ownUnit = (user: AuthUser): string | null => (user.adminUnitId !== undefined ? user.adminUnitId : scopeUnitId(user.role, user));
+
+/** ltree `inner <@ outer` on path strings. */
+export const pathWithin = (inner: string, outer: string): boolean => inner === outer || inner.startsWith(`${outer}.`);
+
+/**
+ * TypeORM where-fragment restricting rows to the user's unit subtree. The record's unit is `alias.unitColumn`, or by
+ * default the most specific of alias.kebeleId / woredaId / zoneId / regionId.
+ * Usage: const s = scopeCondition(user, 'f'); qb.andWhere(s.sql, s.params)
+ */
+export function scopeCondition(user: AuthUser, alias: string, unitColumn?: string): { sql: string; params: Record<string, unknown> } {
+  if (isNational(user)) return { sql: '1=1', params: {} };
+  const unitId = ownUnit(user);
+  if (!unitId) return { sql: '1=0', params: {} };
+  const recordUnit = unitColumn ? `${alias}.${unitColumn}` : `COALESCE(${alias}.kebeleId, ${alias}.woredaId, ${alias}.zoneId, ${alias}.regionId)`;
+  return {
+    sql: `${recordUnit} IN (SELECT su.id FROM admin_units su WHERE su.path <@ (SELECT sp.path FROM admin_units sp WHERE sp.id = :scopeUnitId))`,
+    params: { scopeUnitId: unitId }
+  };
+}
+
+/** Record unit inside the user's unit. */
 export function inScope(user: AuthUser, unit: UnitRef): boolean {
   if (isNational(user)) return true;
-  if (['DA', 'KEBELE'].includes(user.role)) return !!unit.kebeleId && unit.kebeleId === user.kebeleId;
-  if (user.role === 'WOREDA') return !!unit.woredaId && unit.woredaId === user.woredaId;
-  if (user.role === 'ZONE') return !!unit.zoneId && unit.zoneId === user.zoneId;
-  if (user.regionId) return unit.regionId === user.regionId;
-  return false;
+  const own = ownUnit(user);
+  if (!own) return false;
+  if (unit.path && user.unitPath) return pathWithin(unit.path, user.unitPath);
+  // Without paths: the user's unit must be on the record's ancestor chain (same rule for the four legacy levels).
+  return [unit.regionId, unit.zoneId, unit.woredaId, unit.kebeleId].includes(own);
 }
 
-export function assertInScope(user: AuthUser, unit: UnitRef, what = 'record'): void {
-  if (!inScope(user, unit)) throw Errors.forbidden(`This ${what} is outside your assigned administrative area`);
+/** The user's own unit is inside `unit` (roll-up views of the areas above the user). */
+export function containsUserUnit(user: AuthUser, unit: UnitRef): boolean {
+  if (isNational(user)) return true;
+  const own = ownUnit(user);
+  if (!own) return false;
+  if (unit.path && user.unitPath) return pathWithin(user.unitPath, unit.path);
+  // Without paths: `unit` must be on the user's own chain, at or above the user's unit.
+  const chain = [user.regionId, user.zoneId, user.woredaId, user.kebeleId];
+  const deepest = unit.kebeleId || unit.woredaId || unit.zoneId || unit.regionId;
+  const at = deepest ? chain.indexOf(deepest) : -1;
+  return at >= 0 && at <= chain.indexOf(own);
+}
+
+/** Inside the user's unit, or above it (roll-up and breadcrumb views of the areas a user belongs to). */
+export const unitVisible = (user: AuthUser, unit: UnitRef): boolean => inScope(user, unit) || containsUserUnit(user, unit);
+
+/** 403 OUT_OF_SCOPE unless the record's unit is inside the user's unit. */
+export function assertInScope(user: AuthUser, unit: UnitRef | null, what = 'record'): void {
+  if (!unit || !inScope(user, unit)) throw Errors.outOfScope(what);
+}
+
+/** 403 OUT_OF_SCOPE unless the unit is inside or above the user's unit (read-only roll-up views). */
+export function assertUnitVisible(user: AuthUser, unit: UnitRef | null, what = 'unit'): void {
+  if (!unit || !unitVisible(user, unit)) throw Errors.outOfScope(what);
 }

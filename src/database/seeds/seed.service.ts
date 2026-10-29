@@ -11,6 +11,9 @@ import { AuditService } from '../../modules/audit/audit.service';
 import { SignaturesService } from '../../modules/signatures/signatures.service';
 import { UsersService } from '../../modules/users/users.service';
 import { Setting } from '../../modules/settings/entities/setting.entity';
+import { Season } from '../../modules/seasons/entities/season.entity';
+import { backfillAdminUnits, backfillUserUnits } from '../../modules/admin-units/admin-unit-backfill';
+import { seasonFromName, seasonStatusRelativeTo } from '../../modules/seasons/season-calendar';
 import { RoleEntity } from '../../modules/users/entities/role.entity';
 import { RbacService } from '../../modules/users/rbac.service';
 import { backfillOpeningLots } from '../../modules/logistics/warehouses/lot-backfill';
@@ -122,7 +125,9 @@ export class SeedService {
     await this.ds.transaction(async m => {
       await this.seedReference(m);
       const units = await this.seedHierarchy(m);
+      await backfillAdminUnits(m);
       await this.seedUsers(m, units);
+      await backfillUserUnits(m);
       await this.seedFarmers(m, units);
       await this.seedNational(m);
       await this.seedIntegrations(m);
@@ -162,6 +167,11 @@ export class SeedService {
       kebeleEscalationDays: this.config.get<number>('kebeleEscalationDays') ?? 7
     };
     await m.getRepository(Setting).save(Object.entries(settings).map(([key, value]) => ({ key, value, updatedBy: 'seed' })));
+    const current = seasonFromName(meta.currentSeason);
+    for (const name of new Set([meta.currentSeason, ...meta.seasons])) {
+      const s = seasonFromName(name);
+      if (s) await m.getRepository(Season).insert({ ...s, status: seasonStatusRelativeTo(s, current), isCurrent: s.id === current?.id });
+    }
 
     const extraRoles = [
       { id: 'ATI', name: 'Agricultural Transformation Institute', level: 'National', desc: 'Demand document co-signatory, farmer registry custodian' },

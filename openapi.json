@@ -1707,6 +1707,427 @@
         ]
       }
     },
+    "/api/v1/admin-units/tree": {
+      "get": {
+        "operationId": "AdminUnitsController_tree_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdminUnitTreeDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The user's unit subtree (the whole country for national roles)",
+        "tags": [
+          "Admin units (REQ-1.7-001)"
+        ]
+      }
+    },
+    "/api/v1/admin-units/{id}": {
+      "get": {
+        "operationId": "AdminUnitsController_detail_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUnitDetailDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "One unit with its ancestors (inside or above the user unit)",
+        "tags": [
+          "Admin units (REQ-1.7-001)"
+        ]
+      }
+    },
+    "/api/v1/admin-units/{id}/children": {
+      "get": {
+        "operationId": "AdminUnitsController_children_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AdminUnitDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Direct children of a unit inside the user unit",
+        "tags": [
+          "Admin units (REQ-1.7-001)"
+        ]
+      }
+    },
+    "/api/v1/seasons": {
+      "get": {
+        "operationId": "SeasonsController_list_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SeasonDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "All seasons, newest first",
+        "tags": [
+          "Seasons"
+        ]
+      }
+    },
+    "/api/v1/seasons/current": {
+      "get": {
+        "operationId": "SeasonsController_current_v1",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeasonDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "The current season (default for new records)",
+        "tags": [
+          "Seasons"
+        ]
+      }
+    },
+    "/api/v1/seasons/{id}": {
+      "get": {
+        "operationId": "SeasonsController_byId_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SeasonDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "One season",
+        "tags": [
+          "Seasons"
+        ]
+      }
+    },
+    "/api/v1/workflow/cases": {
+      "get": {
+        "operationId": "WorkflowController_forEntity_v1",
+        "parameters": [
+          {
+            "name": "entityType",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "maxLength": 40,
+              "example": "WOREDA",
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "maxLength": 60,
+              "example": "WOR-OR-ADAMA",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowCaseDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cases of one record or unit that the user can read",
+        "tags": [
+          "Workflow"
+        ]
+      }
+    },
+    "/api/v1/workflow/cases/{id}": {
+      "get": {
+        "operationId": "WorkflowController_detail_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowCaseDetailDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "A case with the actions available to the user and its history",
+        "tags": [
+          "Workflow"
+        ]
+      }
+    },
+    "/api/v1/workflow/cases/{id}/available": {
+      "get": {
+        "operationId": "WorkflowController_available_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AvailableActionDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Actions the user may take on the case now",
+        "tags": [
+          "Workflow"
+        ]
+      }
+    },
+    "/api/v1/workflow/cases/{id}/actions": {
+      "post": {
+        "operationId": "WorkflowController_act_v1",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowActDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowCaseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Take an action (transition, permission and scope checked; e-signature when the step requires it)",
+        "tags": [
+          "Workflow"
+        ]
+      }
+    },
+    "/api/v1/workflow/history": {
+      "get": {
+        "operationId": "WorkflowController_history_v1",
+        "parameters": [
+          {
+            "name": "entityType",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "maxLength": 40,
+              "example": "WOREDA",
+              "type": "string"
+            }
+          },
+          {
+            "name": "entityId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "maxLength": 60,
+              "example": "WOR-OR-ADAMA",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkflowHistoryEntryDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Approval history of a record or unit (legacy approvals merged with workflow actions)",
+        "tags": [
+          "Workflow"
+        ]
+      }
+    },
     "/api/farmers": {
       "get": {
         "operationId": "FarmersController_list",
@@ -12012,6 +12433,505 @@
         "required": [
           "hours",
           "reason"
+        ]
+      },
+      "AdminUnitTreeDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "WOR-OR-ADAMA"
+          },
+          "type": {
+            "enum": [
+              "COUNTRY",
+              "REGION",
+              "ZONE",
+              "WOREDA",
+              "KEBELE",
+              "UNION",
+              "PC",
+              "CITY_ADMIN",
+              "SPECIAL_WOREDA"
+            ],
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "example": "Adama"
+          },
+          "nameAm": {
+            "type": "string",
+            "nullable": true
+          },
+          "nameOm": {
+            "type": "string",
+            "nullable": true
+          },
+          "parentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "path": {
+            "type": "string",
+            "example": "ET.REG_OROMIA.ZONE_OR_ESHEWA.WOR_OR_ADAMA"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminUnitTreeDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "code",
+          "name",
+          "nameAm",
+          "nameOm",
+          "parentId",
+          "path",
+          "active",
+          "children"
+        ]
+      },
+      "AdminUnitDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "WOR-OR-ADAMA"
+          },
+          "type": {
+            "enum": [
+              "COUNTRY",
+              "REGION",
+              "ZONE",
+              "WOREDA",
+              "KEBELE",
+              "UNION",
+              "PC",
+              "CITY_ADMIN",
+              "SPECIAL_WOREDA"
+            ],
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "example": "Adama"
+          },
+          "nameAm": {
+            "type": "string",
+            "nullable": true
+          },
+          "nameOm": {
+            "type": "string",
+            "nullable": true
+          },
+          "parentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "path": {
+            "type": "string",
+            "example": "ET.REG_OROMIA.ZONE_OR_ESHEWA.WOR_OR_ADAMA"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "code",
+          "name",
+          "nameAm",
+          "nameOm",
+          "parentId",
+          "path",
+          "active"
+        ]
+      },
+      "AdminUnitDetailDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "WOR-OR-ADAMA"
+          },
+          "type": {
+            "enum": [
+              "COUNTRY",
+              "REGION",
+              "ZONE",
+              "WOREDA",
+              "KEBELE",
+              "UNION",
+              "PC",
+              "CITY_ADMIN",
+              "SPECIAL_WOREDA"
+            ],
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "example": "Adama"
+          },
+          "nameAm": {
+            "type": "string",
+            "nullable": true
+          },
+          "nameOm": {
+            "type": "string",
+            "nullable": true
+          },
+          "parentId": {
+            "type": "string",
+            "nullable": true
+          },
+          "path": {
+            "type": "string",
+            "example": "ET.REG_OROMIA.ZONE_OR_ESHEWA.WOR_OR_ADAMA"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "ancestors": {
+            "description": "From the country down to the parent (breadcrumb)",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AdminUnitDto"
+            }
+          },
+          "childCount": {
+            "type": "number",
+            "description": "Number of direct children"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "code",
+          "name",
+          "nameAm",
+          "nameOm",
+          "parentId",
+          "path",
+          "active",
+          "ancestors",
+          "childCount"
+        ]
+      },
+      "SeasonDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "MEHER-2026"
+          },
+          "name": {
+            "type": "string",
+            "example": "Meher 2026"
+          },
+          "type": {
+            "enum": [
+              "MEHER",
+              "BELG",
+              "IRRIGATION"
+            ],
+            "type": "string"
+          },
+          "year": {
+            "type": "number",
+            "example": 2026
+          },
+          "startsOn": {
+            "type": "string",
+            "example": "2026-06-01",
+            "format": "date"
+          },
+          "endsOn": {
+            "type": "string",
+            "example": "2026-12-31",
+            "format": "date"
+          },
+          "collectionDeadline": {
+            "type": "string",
+            "example": "2026-03-31",
+            "format": "date"
+          },
+          "status": {
+            "enum": [
+              "PLANNING",
+              "OPEN",
+              "CLOSED"
+            ],
+            "type": "string"
+          },
+          "isCurrent": {
+            "type": "boolean",
+            "description": "The season new records default to"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "type",
+          "year",
+          "startsOn",
+          "endsOn",
+          "collectionDeadline",
+          "status",
+          "isCurrent"
+        ]
+      },
+      "WorkflowCaseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "WFC-8F2K1Q"
+          },
+          "definition": {
+            "type": "string",
+            "example": "DEMAND_PACKAGE_REVIEW"
+          },
+          "entityType": {
+            "type": "string",
+            "example": "WOREDA",
+            "description": "Record type, or the unit type for per-unit-and-season cases"
+          },
+          "entityId": {
+            "type": "string",
+            "example": "WOR-OR-ADAMA"
+          },
+          "seasonId": {
+            "type": "string",
+            "nullable": true,
+            "example": "MEHER-2026"
+          },
+          "level": {
+            "type": "string",
+            "example": "ZONE",
+            "description": "Type of the unit that must act next"
+          },
+          "status": {
+            "type": "string",
+            "example": "PENDING_ZONE",
+            "description": "Status code (translated by the frontend)"
+          },
+          "assigneeUnitId": {
+            "type": "string",
+            "example": "ZONE-OR-ESHEWA"
+          },
+          "originUnitId": {
+            "type": "string",
+            "example": "WOR-OR-ADAMA"
+          },
+          "dueAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "escalationLevel": {
+            "type": "number"
+          },
+          "version": {
+            "type": "number",
+            "description": "Send back as expectedVersion to detect concurrent changes"
+          },
+          "closed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "definition",
+          "entityType",
+          "entityId",
+          "seasonId",
+          "level",
+          "status",
+          "assigneeUnitId",
+          "originUnitId",
+          "dueAt",
+          "escalationLevel",
+          "version",
+          "closed"
+        ]
+      },
+      "AvailableActionDto": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "example": "APPROVE"
+          },
+          "toStatus": {
+            "type": "string",
+            "example": "APPROVED"
+          },
+          "signatureRequired": {
+            "type": "boolean"
+          },
+          "commentsRequired": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "action",
+          "toStatus",
+          "signatureRequired",
+          "commentsRequired"
+        ]
+      },
+      "WorkflowHistoryEntryDto": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "enum": [
+              "LEGACY",
+              "WORKFLOW"
+            ],
+            "type": "string",
+            "description": "LEGACY = approval_actions recorded before the workflow engine"
+          },
+          "caseId": {
+            "type": "string",
+            "nullable": true
+          },
+          "definition": {
+            "type": "string",
+            "nullable": true
+          },
+          "level": {
+            "type": "string",
+            "example": "WOREDA"
+          },
+          "action": {
+            "type": "string",
+            "example": "APPROVE"
+          },
+          "fromStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "toStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "comments": {
+            "type": "string",
+            "nullable": true
+          },
+          "details": {
+            "type": "object",
+            "nullable": true
+          },
+          "by": {
+            "type": "string",
+            "nullable": true,
+            "description": "Actor name (\"system\" for scheduled actions)"
+          },
+          "at": {
+            "type": "string",
+            "example": "2026-10-29 10:15:00"
+          },
+          "signatureId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "source",
+          "caseId",
+          "definition",
+          "level",
+          "action",
+          "fromStatus",
+          "toStatus",
+          "comments",
+          "details",
+          "by",
+          "at",
+          "signatureId"
+        ]
+      },
+      "WorkflowCaseDetailDto": {
+        "type": "object",
+        "properties": {
+          "case": {
+            "$ref": "#/components/schemas/WorkflowCaseDto"
+          },
+          "available": {
+            "description": "Actions the current user may take now",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AvailableActionDto"
+            }
+          },
+          "history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkflowHistoryEntryDto"
+            }
+          }
+        },
+        "required": [
+          "case",
+          "available",
+          "history"
+        ]
+      },
+      "WorkflowActDto": {
+        "type": "object",
+        "properties": {
+          "pin": {
+            "type": "string",
+            "example": "1234",
+            "description": "E-signature PIN"
+          },
+          "password": {
+            "type": "string",
+            "description": "Account password (alternative to PIN)"
+          },
+          "action": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Z0-9_]{1,29}$",
+            "example": "APPROVE"
+          },
+          "comments": {
+            "type": "string",
+            "maxLength": 4000
+          },
+          "details": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "expectedVersion": {
+            "type": "number",
+            "minimum": 1,
+            "description": "Version the user saw; 409 when the case changed since"
+          }
+        },
+        "required": [
+          "action"
         ]
       },
       "SyncRecordDto": {

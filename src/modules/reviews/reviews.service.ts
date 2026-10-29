@@ -10,7 +10,7 @@ import { can, Permission } from '../../common/constants/permissions';
 import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { Errors } from '../../common/utils/errors';
 import { fmtMT, round, stamp } from '../../common/utils/helpers';
-import { isNational } from '../../common/utils/scope';
+import { assertInScope, assertUnitVisible, scopeCondition } from '../../common/utils/scope';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { AggregationService } from '../aggregation/aggregation.service';
 import { AuditService } from '../audit/audit.service';
@@ -48,6 +48,9 @@ const SIGNIFICANT_ADJUSTMENT_PCT = 10;
 
 type ReviewUnit = { id: string; name: string; status: string };
 
+/** Comment scopes that are administrative units (others — FTWG, ALERT, … — are scoped by their own module). */
+const UNIT_THREADS = ['REGION', 'ZONE', 'WOREDA', 'KEBELE'] as const;
+
 /** Woreda & Zone review, demand adjustments, comment threads and approval (REQ-1.2-002, -003, -004). */
 @Injectable()
 export class ReviewsService {
@@ -75,14 +78,17 @@ export class ReviewsService {
       ? await this.hierarchy.woredas.findOne({ where: { id: unitId } })
       : await this.hierarchy.zones.findOne({ where: { id: unitId } });
     if (!unit) throw Errors.notFound(cfg.label);
-    if (!isNational(user)) {
-      const chain = (await this.hierarchy.unitRef(cfg.entity, unitId)) || {};
-      const ok = (user.role === 'WOREDA' && !!chain.woredaId && chain.woredaId === user.woredaId)
-        || (user.role === 'ZONE' && !!chain.zoneId && chain.zoneId === user.zoneId)
-        || (user.role === 'REGION' && !!chain.regionId && chain.regionId === user.regionId);
-      if (!ok) throw Errors.forbidden('This unit is outside your assigned administrative area');
-    }
+    assertInScope(user, await this.hierarchy.unitRef(cfg.entity, unitId), 'unit');
     return unit;
+  }
+
+  /** Comment threads on a unit are shared by the unit and the levels above and below it. */
+  private async assertThreadVisible(user: AuthUser, scopeType: string, scopeId: string) {
+    const level = UNIT_THREADS.find(t => t === scopeType);
+    if (!level) return;
+    const ref = await this.hierarchy.unitRef(level, scopeId);
+    if (!ref) throw Errors.notFound(`${scopeType} ${scopeId}`);
+    assertUnitVisible(user, ref, 'unit');
   }
 
   adjustmentToFrontend(a: DemandAdjustment) {
@@ -126,10 +132,15 @@ export class ReviewsService {
   }
 
   // ---------------- Adjustments ----------------
-  async listAdjustments(q: AdjustmentQueryDto) {
-    const qb = this.adjustments.createQueryBuilder('a');
+  async listAdjustments(q: AdjustmentQueryDto, user: AuthUser) {
+    const s = scopeCondition(user, 'a', 'unitId');
+    const qb = this.adjustments.createQueryBuilder('a').where(s.sql, s.params);
     if (q.level) qb.andWhere('a.level = :level', { level: String(q.level).toUpperCase() });
-    if (q.unitId) qb.andWhere('a.unitId = :unitId', { unitId: q.unitId });
+    if (q.unitId) {
+      const unit = await this.hierarchy.adminUnits.unitRef(q.unitId);
+      if (unit) assertInScope(user, unit, 'unit');
+      qb.andWhere('a.unitId = :unitId', { unitId: q.unitId });
+    }
     const rows = await qb.orderBy('a.id', 'ASC').getMany();
     return rows.map(a => this.adjustmentToFrontend(a));
   }
@@ -145,12 +156,12 @@ export class ReviewsService {
       if (level === 'WOREDA') {
         const k = await m.getRepository(Kebele).findOne({ where: { id: dto.unitId } });
         if (!k) throw Errors.notFound('Kebele');
-        if (user.role !== 'ADMIN' && k.woredaId !== user.woredaId) throw Errors.forbidden('Kebele is outside your woreda');
+        assertInScope(user, await this.hierarchy.unitRef('KEBELE', k.id), 'kebele');
         unit = k; unitType = 'KEBELE'; rawMT = k.demandMt;
       } else {
         const w = await m.getRepository(Woreda).findOne({ where: { id: dto.unitId } });
         if (!w) throw Errors.notFound('Woreda');
-        if (w.zoneId !== user.zoneId) throw Errors.forbidden('Woreda is outside your zone');
+        assertInScope(user, await this.hierarchy.unitRef('WOREDA', w.id), 'woreda');
         unit = w; unitType = 'WOREDA';
         const r = await m.getRepository(Kebele).createQueryBuilder('k').select('COALESCE(SUM(k.demandMt),0)', 's').where('k.woredaId = :id', { id: w.id }).getRawOne();
         rawMT = Number(r?.s) || 0;
@@ -187,11 +198,13 @@ export class ReviewsService {
   }
 
   // ---------------- Comments ----------------
-  listComments(scopeType: string, scopeId: string) {
+  async listComments(scopeType: string, scopeId: string, user: AuthUser) {
+    await this.assertThreadVisible(user, scopeType, scopeId);
     return this.comments.list(scopeType, scopeId);
   }
 
   async addComment(dto: CreateCommentDto, user: AuthUser, ctx: RequestContext) {
+    await this.assertThreadVisible(user, dto.scopeType, dto.scopeId);
     const comment = await this.ds.transaction(async m => {
       const c = await this.comments.add(user, dto.scopeType, dto.scopeId, dto.text, dto.parentId ?? null, m);
       await this.audit.record(user, 'REVIEW_COMMENT_ADDED', `${dto.scopeType}:${dto.scopeId}`, { commentId: c.id }, ctx, m);
@@ -271,7 +284,10 @@ export class ReviewsService {
   }
 
   // ---------------- Scenario modelling ----------------
-  async scenario(dto: ScenarioDto) {
+  async scenario(dto: ScenarioDto, user: AuthUser) {
+    const unit = await this.hierarchy.unitRef(dto.level, dto.unitId);
+    if (!unit) throw Errors.notFound(`${dto.level} ${dto.unitId}`);
+    assertUnitVisible(user, unit, 'unit');
     const drill = await this.aggregation.drilldown(dto.level, dto.unitId);
     const map: Record<string, number> = Object.fromEntries(dto.adjustments.map(a => [a.childId, a.changePct]));
     const kids: any[] = drill.children;

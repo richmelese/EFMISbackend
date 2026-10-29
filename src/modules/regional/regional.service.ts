@@ -9,7 +9,7 @@ import { RULES } from '../../common/constants/rules';
 import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { Errors } from '../../common/utils/errors';
 import { nowStamp, round, sha256, stamp } from '../../common/utils/helpers';
-import { isNational } from '../../common/utils/scope';
+import { assertInScope, assertUnitVisible, isNational } from '../../common/utils/scope';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { AggregationService } from '../aggregation/aggregation.service';
 import { ExternalService, NSIS_LAYERS } from '../external/external.service';
@@ -45,10 +45,13 @@ export class RegionalService {
     private readonly settings: SettingsService
   ) {}
 
-  private async regionRow(id: string, user: AuthUser): Promise<Region> {
+  /** Reads: the region contains (or is inside) the user's unit. `act`: the region must be inside the user's unit. */
+  private async regionRow(id: string, user: AuthUser, act = false): Promise<Region> {
     const r = await this.hierarchy.regions.findOne({ where: { id } });
     if (!r) throw Errors.notFound('Region');
-    if (!isNational(user) && user.regionId !== r.id) throw Errors.forbidden('Regional officers can only view their own region');
+    const unit = await this.hierarchy.unitRef('REGION', r.id);
+    if (act) assertInScope(user, unit, 'region');
+    else assertUnitVisible(user, unit, 'region');
     return r;
   }
 
@@ -163,7 +166,7 @@ export class RegionalService {
   }
 
   async submit(id: string, dto: SubmitRegionDto, user: AuthUser, ctx: RequestContext) {
-    const r0 = await this.regionRow(id, user);
+    const r0 = await this.regionRow(id, user, true);
     const dq = await this.dataQuality(r0);
     if (!dq.passed) throw Errors.unprocessable('Pre-submission validation failed', dq.issues);
     const season = (await this.settings.get<any>('systemMetadata', {}))?.currentSeason;

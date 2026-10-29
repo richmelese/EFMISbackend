@@ -105,8 +105,8 @@ export class QuotaController {
   @Get('adjustment-requests/stats')
   @RequirePermissions('quota:read')
   @ApiOperation({ summary: 'Adjustment request statistics' })
-  requestStats() {
-    return this.runs.requestStats();
+  requestStats(@CurrentUser() user: AuthUser) {
+    return this.runs.requestStats(user);
   }
 
   @Post('adjustment-requests')
@@ -187,8 +187,8 @@ export class QuotaController {
   @Get('allocations/:id/recommendation')
   @RequirePermissions('quota:allocate')
   @ApiOperation({ summary: 'Recommended split among child units (70% historical, 30% equal)' })
-  recommendation(@Param('id') id: string) {
-    return this.quota.recommendation(id);
+  recommendation(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.quota.recommendation(user, id);
   }
 
   @Post('allocations/:id/children')

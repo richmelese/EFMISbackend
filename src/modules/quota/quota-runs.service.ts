@@ -7,7 +7,7 @@ import { RULES } from '../../common/constants/rules';
 import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { Errors } from '../../common/utils/errors';
 import { fmtMT, nowStamp, round, shortId, stamp } from '../../common/utils/helpers';
-import { isNational } from '../../common/utils/scope';
+import { assertInScope, assertUnitVisible, unitVisible } from '../../common/utils/scope';
 import { AuditService } from '../audit/audit.service';
 import { SignaturesService } from '../signatures/signatures.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -81,7 +81,7 @@ export class QuotaRunsService {
 
   /** Current regional quota table ("Provisional Quota Cascade" tab) */
   async regionTable(user: AuthUser) {
-    const rows = (await this.regions.find({ order: { sort: 'ASC' } })).filter(r => isNational(user) || r.id === user.regionId);
+    const rows = (await this.regions.find({ order: { sort: 'ASC' } })).filter(r => unitVisible(user, { regionId: r.id }));
     const counts = await this.requests.createQueryBuilder('r').select('r.regionId', 'regionId').addSelect('COUNT(*)', 'c')
       .where('r.status IN (:...s)', { s: PENDING_REQUEST }).groupBy('r.regionId').getRawMany();
     const byRegion = Object.fromEntries(counts.map(c => [c.regionId, Number(c.c)]));
@@ -194,10 +194,12 @@ export class QuotaRunsService {
     return Object.fromEntries((await this.regions.find()).map(r => [r.id, r.name]));
   }
 
-  private async getRequest(id: string, user: AuthUser, repo: Repository<QuotaAdjustmentRequest> = this.requests) {
+  /** Requests belong to a region: readable from inside or below it; `act` (appeal) only by the region itself. */
+  private async getRequest(id: string, user: AuthUser, repo: Repository<QuotaAdjustmentRequest> = this.requests, act = false) {
     const r = await repo.findOneBy({ id });
     if (!r) throw Errors.notFound('Adjustment request');
-    if (!isNational(user) && r.regionId !== user.regionId) throw Errors.forbidden();
+    if (act) assertInScope(user, { regionId: r.regionId }, 'adjustment request');
+    else assertUnitVisible(user, { regionId: r.regionId }, 'adjustment request');
     return r;
   }
 
@@ -206,14 +208,14 @@ export class QuotaRunsService {
   }
 
   async listRequests(user: AuthUser) {
-    const rows = await this.requests.find({ where: isNational(user) ? {} : { regionId: user.regionId ?? '' }, order: { createdAt: 'DESC' } });
+    const rows = (await this.requests.find({ order: { createdAt: 'DESC' } })).filter(r => unitVisible(user, { regionId: r.regionId }));
     const names = await this.regionNames();
     const commentsByRequest = await this.comments.listByScopes('QUOTA_REQUEST', rows.map(r => r.id));
     return Promise.all(rows.map(r => this.requestToFrontend(r, names, commentsByRequest.get(r.id) ?? [])));
   }
 
-  async requestStats() {
-    const rows = await this.requests.find({ order: { createdAt: 'ASC' } });
+  async requestStats(user: AuthUser) {
+    const rows = (await this.requests.find({ order: { createdAt: 'ASC' } })).filter(r => unitVisible(user, { regionId: r.regionId }));
     const quotas = Object.fromEntries((await this.regions.find()).map(r => [r.id, r.quotaAllocationMt]));
     const byRegion: Record<string, { regionId: string; approved: number; rejected: number; pending: number; adjustmentPcts: number[] }> = {};
     for (const r of rows) {
@@ -270,7 +272,7 @@ export class QuotaRunsService {
   }
 
   async appeal(user: AuthUser, id: string, dto: AppealDto, ctx: RequestContext) {
-    const r = await this.getRequest(id, user);
+    const r = await this.getRequest(id, user, this.requests, true);
     if (!['REJECTED', 'PARTIALLY_APPROVED'].includes(r.status)) throw Errors.conflict('Only rejected or partially approved requests can be appealed');
     await this.ds.transaction(async m => {
       await m.getRepository(QuotaAdjustmentRequest).update({ id: r.id }, { status: 'APPEALED', appealReason: dto.reason });

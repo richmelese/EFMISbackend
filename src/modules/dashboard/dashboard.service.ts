@@ -98,7 +98,7 @@ export class DashboardService {
 
     let farmerRegistry: any[] = [];
     if (canFarmers) {
-      const s = scopeCondition(u, 'f');
+      const s = scopeCondition(u, 'f', 'kebeleId');
       const farmers = await this.farmers.createQueryBuilder('f').leftJoinAndSelect('f.demands', 'd')
         .where('f.deleted = false').andWhere(s.sql, s.params).orderBy('f.id', 'ASC').addOrderBy('d.id', 'ASC').getMany();
       farmerRegistry = [];
@@ -166,7 +166,7 @@ export class DashboardService {
 
   // ---------------- GET /dashboard (role widgets) ----------------
   async dashboard(u: AuthUser) {
-    const s = scopeCondition(u, 'f');
+    const s = scopeCondition(u, 'f', 'kebeleId');
     const count = (extra?: string) => {
       const qb = this.farmers.createQueryBuilder('f').where('f.deleted = false').andWhere(s.sql, s.params);
       if (extra) qb.andWhere(extra);

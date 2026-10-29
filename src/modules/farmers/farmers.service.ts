@@ -189,7 +189,7 @@ export class FarmersService {
   // ------------------------------------------------------------------ queries
 
   async list(user: AuthUser, q: ListFarmersQueryDto) {
-    const s = scopeCondition(user, 'f');
+    const s = scopeCondition(user, 'f', 'kebeleId');
     const qb = this.repo.createQueryBuilder('f').leftJoinAndSelect('f.demands', 'd').where('f.deleted = false').andWhere(s.sql, s.params);
     applySearch(qb, ['f.name', 'f.id', 'f.faydaId', 'f.landCertNumber', 'f.kebele'], q.q);
     if (q.kebeleId) qb.andWhere('f.kebeleId = :kebeleId', { kebeleId: q.kebeleId });
@@ -267,13 +267,11 @@ export class FarmersService {
    */
   async register(user: AuthUser, input: RegisterFarmerDto, ctx: RequestContext, opts: { source?: 'ONLINE' | 'OFFLINE_SYNC' } = {}) {
     const source = opts.source || 'ONLINE';
-    // Kebele selection must match DA's assigned location
+    // The kebele must be inside the registering user's unit (a DA: their own kebele)
     const kebeleId = input.kebeleId || user.kebeleId;
     if (!kebeleId) throw Errors.badRequest('kebeleId is required');
-    if (user.role === 'DA' && user.kebeleId && kebeleId !== user.kebeleId) {
-      throw Errors.forbidden("Kebele selection must match the DA's assigned location");
-    }
     const k = await this.hierarchy.resolveKebele(kebeleId);
+    assertInScope(user, { regionId: k.region.id, zoneId: k.zone.id, woredaId: k.woreda.id, kebeleId }, 'kebele');
     const maxHa = k.region.maxFarmSizeHa ?? RULES.defaultMaxFarmSizeHa;
 
     const fullName = [input.firstName, input.middleName, input.lastName].filter(Boolean).join(' ').trim();

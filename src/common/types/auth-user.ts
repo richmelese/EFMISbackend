@@ -12,6 +12,8 @@ export interface AdministrativeScope {
   kebeleId: string | null;
   /** Logistics: warehouse scope for WAREHOUSE_OPERATOR */
   warehouseId?: string | null;
+  /** The admin unit the data scope is anchored at (users.admin_unit_id); null for national / logistics roles */
+  adminUnitId?: string | null;
 }
 
 /**
@@ -36,6 +38,8 @@ export interface AuthUser extends Readonly<AdministrativeScope> {
   /** Must change the temporary password before using anything else */
   readonly mustChangePassword?: boolean;
   readonly title: string | null;
+  /** admin_units.path of adminUnitId (resolved per request; used by the scope helpers) */
+  readonly unitPath?: string | null;
   readonly preferredLanguage: string;
   /** JWT id (session id) */
   readonly jti?: string;

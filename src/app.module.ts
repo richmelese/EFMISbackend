@@ -24,6 +24,10 @@ import { CommentsModule } from './modules/comments/comments.module';
 import { ApprovalsModule } from './modules/approvals/approvals.module';
 import { ExternalModule } from './modules/external/external.module';
 import { HierarchyModule } from './modules/hierarchy/hierarchy.module';
+import { SeasonsModule } from './modules/seasons/seasons.module';
+import { AdminUnitsModule } from './modules/admin-units/admin-units.module';
+import { WorkflowModule } from './modules/workflow/workflow.module';
+import { OutboxModule } from './modules/outbox/outbox.module';
 // Business domains (requirement sections)
 import { FarmersModule } from './modules/farmers/farmers.module';
 import { KebeleReviewModule } from './modules/kebele-review/kebele-review.module';
@@ -51,7 +55,7 @@ import { LogisticsModule } from './modules/logistics/logistics.module';
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 600 }]),
     // platform
     DomainEventsModule, SettingsModule, AuditModule, UsersModule, AuthModule, SignaturesModule, NotificationsModule, AlertsModule,
-    CommentsModule, ApprovalsModule, ExternalModule, HierarchyModule,
+    CommentsModule, ApprovalsModule, ExternalModule, AdminUnitsModule, HierarchyModule, SeasonsModule, WorkflowModule, OutboxModule,
     // domains
     FarmersModule, KebeleReviewModule, AggregationModule, ReviewsModule, RegionalModule, NationalModule, QuotaModule,
     IntegrationsModule, ReportsModule, UssdModule, DashboardModule, SchedulerModule,

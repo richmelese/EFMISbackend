@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { Alert } from './entities/alert.entity';
 import { AlertSeverity, RULES } from '../../common/constants/rules';
 import { nowStamp, stamp } from '../../common/utils/helpers';
 import { NotificationsService } from '../notifications/notifications.service';
+import { DomainEvents } from '../../common/events';
+import { OutboxProblem } from '../outbox/outbox.types';
 
 const PMO_STATUS: Record<string, string> = { CRITICAL_RED: 'ESCALATED_TO_PMO', HIGH_ORANGE: 'NOTIFIED_MOA', MEDIUM_YELLOW: 'NORMAL', LOW_BLUE: 'NORMAL' };
 
@@ -29,11 +31,25 @@ const LOGISTICS_CATEGORIES = ['Logistics', 'Logistics Delays', 'Logistics & Ware
 
 /** Critical event alerts with SLA tracking (REQ-1.2-006, REQ-INT-005). */
 @Injectable()
-export class AlertsService {
+export class AlertsService implements OnModuleInit {
   constructor(
     @InjectRepository(Alert) readonly repo: Repository<Alert>,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    private readonly events: DomainEvents
   ) {}
+
+  onModuleInit() {
+    this.events.subscribe(OutboxProblem, (p, m) =>
+      this.raise({
+        severity: p.kind === 'DEAD' ? 'HIGH_ORANGE' : 'MEDIUM_YELLOW', category: 'Integration', affectedArea: 'Messaging',
+        title: p.kind === 'DEAD' ? `Outgoing ${p.channel} messages are failing` : `${p.channel} messages not acknowledged by the receiver`,
+        trigger: p.detail, sourceType: 'OUTBOX', sourceId: p.messageId, dedupeKey: p.dedupeKey,
+        actionRequired: p.kind === 'DEAD'
+          ? 'Check the provider configuration; failed messages stay in outbox_messages (status DEAD)'
+          : 'Confirm receipt with the receiving system or resend'
+      }, m).then(() => undefined)
+    );
+  }
 
   hoursRemaining(deadline: Date | null): number | null {
     if (!deadline) return null;

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntityManager, Repository } from 'typeorm';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { User } from './entities/user.entity';
@@ -12,6 +12,8 @@ import { shortId, stamp } from '../../common/utils/helpers';
 import { pageParams } from '../../common/utils/pagination';
 import { applySearch } from '../../common/utils/query-filters';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
+import { AdminUnitsService } from '../admin-units/admin-units.service';
+import { scopeUnitId } from '../../common/utils/scope';
 import { AuditService } from '../audit/audit.service';
 import { RbacService } from './rbac.service';
 import { ChangePasswordDto, CreateUserDto, ListUsersQueryDto, PASSWORD_MESSAGE, PASSWORD_RULE, ResetPasswordDto, UpdateUserDto } from './dto/user.dto';
@@ -40,6 +42,7 @@ export class UsersService {
     @InjectRepository(RoleEntity) readonly roles: Repository<RoleEntity>,
     @InjectDataSource() private readonly ds: DataSource,
     private readonly hierarchy: HierarchyService,
+    private readonly adminUnits: AdminUnitsService,
     private readonly audit: AuditService,
     private readonly rbac: RbacService
   ) {}
@@ -51,7 +54,7 @@ export class UsersService {
     return {
       id: u.id, name: u.fullName, email: u.email, phone: u.phone, role: u.role, roleId: u.role, title: u.title,
       regionId: u.regionId, zoneId: u.zoneId, woredaId: u.woredaId, kebeleId: u.kebeleId, warehouseId: u.warehouseId,
-      preferredLanguage: u.preferredLanguage, mustChangePassword: u.mustChangePassword
+      adminUnitId: u.adminUnitId, preferredLanguage: u.preferredLanguage, mustChangePassword: u.mustChangePassword
     };
   }
 
@@ -59,7 +62,10 @@ export class UsersService {
   async authUserFor(u: User): Promise<AuthUser> {
     const r = await this.rbac.resolve(u.role);
     // r.permissions are role_permissions.permission_key values, kept in sync with the Permission catalogue by RbacService.syncCatalog().
-    return { ...this.toAuthUser(u), role: r.baseRole, roleId: u.role, roleName: r.roleName, permissions: r.permissions as Permission[] };
+    return {
+      ...this.toAuthUser(u), role: r.baseRole, roleId: u.role, roleName: r.roleName, permissions: r.permissions as Permission[],
+      unitPath: await this.adminUnits.pathOf(u.adminUnitId)
+    };
   }
 
   /**
@@ -71,6 +77,20 @@ export class UsersService {
     if (!u) return null;
     if (issuedAt !== undefined && u.tokensValidAfter && issuedAt * 1000 < new Date(u.tokensValidAfter).getTime() - 999) return null;
     return this.authUserFor(u);
+  }
+
+  /**
+   * Contact details of the active users a notification reaches: the user, or the users with a base role whose area
+   * chain contains the unit (same rule as the in-app notification centre).
+   */
+  async contactsFor(to: { userId?: string | null; role?: string | null; unitId?: string | null }, m?: EntityManager): Promise<Array<{ id: string; email: string | null; phone: string | null }>> {
+    if (!to.userId && !to.role) return [];
+    return (m ?? this.ds).query(
+      `SELECT u.id, u.email, u.phone FROM users u JOIN roles r ON r.id = u.role
+       WHERE u.active AND (u.id = $1 OR (COALESCE(r.base_role, r.id) = $2 AND ($3::varchar IS NULL OR $3 IN (u.region_id, u.zone_id, u.woreda_id, u.kebele_id))))
+       ORDER BY u.id LIMIT 5000`,
+      [to.userId ?? null, to.role ?? null, to.unitId ?? null]
+    );
   }
 
   /** Load a user including password/pin hashes. */
@@ -89,7 +109,7 @@ export class UsersService {
       id: u.id, name: u.fullName, email: u.email, phone: u.phone, faydaId: u.faydaId, role: u.role, roleName: role?.name ?? null,
       baseRole: role?.baseRole ?? u.role, title: u.title,
       regionId: u.regionId, zoneId: u.zoneId, woredaId: u.woredaId, kebeleId: u.kebeleId, warehouseId: u.warehouseId,
-      preferredLanguage: u.preferredLanguage, active: u.active, deactivationReason: u.deactivationReason,
+      adminUnitId: u.adminUnitId, preferredLanguage: u.preferredLanguage, active: u.active, deactivationReason: u.deactivationReason,
       mustChangePassword: u.mustChangePassword, passwordChangedAt: stamp(u.passwordChangedAt),
       lastLoginAt: stamp(u.lastLoginAt), createdAt: stamp(u.createdAt), createdBy: u.createdBy
     };
@@ -128,7 +148,7 @@ export class UsersService {
 
   /** Validate and complete the administrative / warehouse scope for the role's base role. */
   private async resolveScope(baseRole: string, input: Partial<Scope>): Promise<Scope> {
-    const s: Scope = { regionId: input.regionId ?? null, zoneId: input.zoneId ?? null, woredaId: input.woredaId ?? null, kebeleId: input.kebeleId ?? null, warehouseId: input.warehouseId ?? null };
+    const s: Scope = { regionId: input.regionId ?? null, zoneId: input.zoneId ?? null, woredaId: input.woredaId ?? null, kebeleId: input.kebeleId ?? null, warehouseId: input.warehouseId ?? null, adminUnitId: null };
     if (s.kebeleId) {
       const c = await this.hierarchy.resolveKebele(s.kebeleId);
       s.regionId = c.region.id; s.zoneId = c.zone.id; s.woredaId = c.woreda.id;
@@ -151,6 +171,7 @@ export class UsersService {
     if (need && !s[need]) {
       throw Errors.unprocessable(`Users with a ${baseRole}-based role must be assigned a ${need.replace('Id', '')}`, { field: need });
     }
+    s.adminUnitId = scopeUnitId(baseRole, s);
     return s;
   }
 

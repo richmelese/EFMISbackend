@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
 import { Setting } from './entities/setting.entity';
+import { SeasonsService } from '../seasons/seasons.service';
 
 /**
  * Typed access to runtime settings. Known keys:
@@ -10,7 +11,10 @@ import { Setting } from './entities/setting.entity';
  */
 @Injectable()
 export class SettingsService {
-  constructor(@InjectRepository(Setting) private readonly repo: Repository<Setting>) {}
+  constructor(
+    @InjectRepository(Setting) private readonly repo: Repository<Setting>,
+    private readonly seasons: SeasonsService
+  ) {}
 
   async get<T = any>(key: string, fallback: T = null as T, manager?: EntityManager): Promise<T> {
     const row = await (manager ? manager.getRepository(Setting) : this.repo).findOne({ where: { key } });
@@ -26,8 +30,8 @@ export class SettingsService {
     return Object.fromEntries(rows.map(r => [r.key, r.value]));
   }
 
-  /** Current season name (e.g. "Meher 2026") */
+  /** Current season name (e.g. "Meher 2026"). Thin wrapper over SeasonsService.current(). */
   async currentSeason(): Promise<string> {
-    return (await this.get<any>('systemMetadata', {}))?.currentSeason || 'Meher 2026';
+    return (await this.seasons.current())?.name || (await this.get<any>('systemMetadata', {}))?.currentSeason || 'Meher 2026';
   }
 }

@@ -51,6 +51,11 @@ export class User {
   @Column({ type: 'varchar', length: 40, nullable: true })
   kebeleId: string | null;
 
+  /** Unit the data scope is anchored at (admin_units.id), derived from the base role and the columns above */
+  @Index('IDX_users_admin_unit_id')
+  @Column({ type: 'varchar', length: 40, nullable: true })
+  adminUnitId: string | null;
+
   /** WAREHOUSE_OPERATOR scope (logistics warehouse UUID) */
   @Column({ type: 'uuid', nullable: true })
   warehouseId: string | null;

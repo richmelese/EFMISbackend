@@ -16,8 +16,8 @@ export class ReviewsController {
   @Get('adjustments')
   @RequirePermissions('aggregation:read')
   @ApiOperation({ summary: 'List demand adjustments (filter by level, unitId)' })
-  listAdjustments(@Query() q: AdjustmentQueryDto) {
-    return this.reviews.listAdjustments(q);
+  listAdjustments(@Query() q: AdjustmentQueryDto, @CurrentUser() user: AuthUser) {
+    return this.reviews.listAdjustments(q, user);
   }
 
   @Post('adjustments')
@@ -30,8 +30,8 @@ export class ReviewsController {
   @Get('comments')
   @RequirePermissions('aggregation:read', 'alerts:read')
   @ApiOperation({ summary: 'Comment thread for a scope (scopeType, scopeId)' })
-  listComments(@Query() q: CommentQueryDto) {
-    return this.reviews.listComments(q.scopeType, q.scopeId);
+  listComments(@Query() q: CommentQueryDto, @CurrentUser() user: AuthUser) {
+    return this.reviews.listComments(q.scopeType, q.scopeId, user);
   }
 
   @Post('comments')
@@ -45,8 +45,8 @@ export class ReviewsController {
   @HttpCode(200)
   @RequirePermissions('aggregation:read')
   @ApiOperation({ summary: 'Scenario modelling: what-if demand changes for child units' })
-  scenario(@Body() dto: ScenarioDto) {
-    return this.reviews.scenario(dto);
+  scenario(@Body() dto: ScenarioDto, @CurrentUser() user: AuthUser) {
+    return this.reviews.scenario(dto, user);
   }
 
   @Get(':level/:unitId')

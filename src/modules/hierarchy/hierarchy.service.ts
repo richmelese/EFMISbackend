@@ -8,6 +8,7 @@ import { Kebele } from './entities/kebele.entity';
 import { FertilizerType } from './entities/fertilizer-type.entity';
 import { Errors } from '../../common/utils/errors';
 import { UnitRef } from '../../common/utils/scope';
+import { AdminUnitsService } from '../admin-units/admin-units.service';
 
 export interface KebeleChain {
   kebele: Kebele;
@@ -18,7 +19,10 @@ export interface KebeleChain {
 
 export type UnitLevel = 'REGION' | 'ZONE' | 'WOREDA' | 'KEBELE';
 
-/** Administrative hierarchy lookups shared by all modules. */
+/**
+ * Facade over the four legacy hierarchy tables (which still hold names, DA names, statuses and planning figures) and
+ * `admin-units` (the unit tree used for scope). Existing callers keep working; new code uses AdminUnitsService.
+ */
 @Injectable()
 export class HierarchyService {
   constructor(
@@ -26,7 +30,8 @@ export class HierarchyService {
     @InjectRepository(Zone) readonly zones: Repository<Zone>,
     @InjectRepository(Woreda) readonly woredas: Repository<Woreda>,
     @InjectRepository(Kebele) readonly kebeles: Repository<Kebele>,
-    @InjectRepository(FertilizerType) readonly fertilizerTypes: Repository<FertilizerType>
+    @InjectRepository(FertilizerType) readonly fertilizerTypes: Repository<FertilizerType>,
+    readonly adminUnits: AdminUnitsService
   ) {}
 
   async resolveKebele(kebeleId: string): Promise<KebeleChain> {
@@ -37,19 +42,10 @@ export class HierarchyService {
     return { kebele, woreda, zone, region: zone.region };
   }
 
-  /** Parent chain for any unit (used for scope checks). */
+  /** Parent chain (and admin_units path) for a unit of the given level; null when no such unit (used for scope checks). */
   async unitRef(level: UnitLevel, id: string): Promise<UnitRef | null> {
-    if (level === 'REGION') return (await this.regions.exist({ where: { id } })) ? { regionId: id } : null;
-    if (level === 'ZONE') {
-      const z = await this.zones.findOne({ where: { id } });
-      return z ? { regionId: z.regionId, zoneId: z.id } : null;
-    }
-    if (level === 'WOREDA') {
-      const w = await this.woredas.findOne({ where: { id }, relations: { zone: true } });
-      return w ? { regionId: w.zone.regionId, zoneId: w.zoneId, woredaId: w.id } : null;
-    }
-    const c = await this.kebeles.findOne({ where: { id }, relations: { woreda: { zone: true } } });
-    return c ? { regionId: c.woreda.zone.regionId, zoneId: c.woreda.zoneId, woredaId: c.woredaId, kebeleId: c.id } : null;
+    const unit = await this.adminUnits.findById(id);
+    return unit?.type === level ? this.adminUnits.unitRef(unit) : null;
   }
 
   regionToFrontend(r: Region, zones?: Zone[]) {

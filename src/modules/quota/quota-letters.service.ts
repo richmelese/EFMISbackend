@@ -9,7 +9,7 @@ import { RULES } from '../../common/constants/rules';
 import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { Errors } from '../../common/utils/errors';
 import { fmtMT, nowStamp, shortId, stamp } from '../../common/utils/helpers';
-import { isNational } from '../../common/utils/scope';
+import { assertInScope, assertUnitVisible, unitVisible } from '../../common/utils/scope';
 import { AuditService } from '../audit/audit.service';
 import { SignaturesService } from '../signatures/signatures.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -100,16 +100,18 @@ export class QuotaLettersService {
   }
 
   async listLetters(user: AuthUser) {
-    const rows = await this.letters.find({ where: isNational(user) ? {} : { regionId: user.regionId ?? '' }, order: { createdAt: 'DESC' } });
+    const rows = (await this.letters.find({ order: { createdAt: 'DESC' } })).filter(l => unitVisible(user, { regionId: l.regionId }));
     const sigIds = rows.map(r => r.signatureId).filter(Boolean) as string[];
     const sigs = sigIds.length ? await this.ds.getRepository(Signature).findBy({ id: In(sigIds) }) : [];
     return rows.map(l => this.letterShape(l, sigs.find(s => s.id === l.signatureId) || null));
   }
 
-  private async letterFor(user: AuthUser, id: string) {
+  /** Letters are addressed to a region: readable from inside or below it; `act` (acknowledge) only by the region. */
+  private async letterFor(user: AuthUser, id: string, act = false) {
     const l = await this.letters.findOneBy({ id });
     if (!l) throw Errors.notFound('Quota letter');
-    if (!isNational(user) && l.regionId !== user.regionId) throw Errors.forbidden();
+    if (act) assertInScope(user, { regionId: l.regionId }, 'quota letter');
+    else assertUnitVisible(user, { regionId: l.regionId }, 'quota letter');
     return l;
   }
 
@@ -142,7 +144,7 @@ export class QuotaLettersService {
   }
 
   async acknowledgeLetter(user: AuthUser, id: string, ctx: RequestContext) {
-    const l = await this.letterFor(user, id);
+    const l = await this.letterFor(user, id, true);
     if (l.status === 'ACKNOWLEDGED') throw Errors.conflict('Letter already acknowledged');
     await this.ds.transaction(async m => {
       const now = new Date();

@@ -5,13 +5,12 @@ import { CurrentUser, ReqCtx, RequirePermissions } from '../../common/decorators
 import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { Errors } from '../../common/utils/errors';
 import { nowStamp, toCsv } from '../../common/utils/helpers';
-import { inScope, UnitRef } from '../../common/utils/scope';
+import { assertInScope, assertUnitVisible, isNational, unitVisible } from '../../common/utils/scope';
 import { HierarchyService, UnitLevel } from '../hierarchy/hierarchy.service';
 import { AuditService } from '../audit/audit.service';
 import { AggregationService } from './aggregation.service';
 
 const UNIT_LEVELS: UnitLevel[] = ['REGION', 'ZONE', 'WOREDA', 'KEBELE'];
-const LEVEL_KEY: Record<UnitLevel, keyof UnitRef> = { REGION: 'regionId', ZONE: 'zoneId', WOREDA: 'woredaId', KEBELE: 'kebeleId' };
 
 @ApiTags('Aggregation & Drill-down (REQ-1.2-001, REQ-INT-006)')
 @ApiBearerAuth()
@@ -28,13 +27,19 @@ export class AggregationController {
    * Farmer-level (KEBELE) detail requires the unit to be inside the user's area.
    */
   private async checkDrillScope(user: AuthUser, level: string, id: string) {
-    if (!UNIT_LEVELS.includes(level as UnitLevel)) return; // national view: field officers see regional totals only
-    const lvl = level as UnitLevel;
-    const unit: UnitRef = (await this.hierarchy.unitRef(lvl, id)) ?? { [LEVEL_KEY[lvl]]: id };
-    const down = inScope(user, unit);
-    const up = (lvl === 'REGION' && user.regionId === id) || (lvl === 'ZONE' && user.zoneId === id) || (lvl === 'WOREDA' && user.woredaId === id);
-    if (!down && !up) throw Errors.forbidden('This unit is outside your assigned administrative area');
-    if (lvl === 'KEBELE' && !down) throw Errors.forbidden('Farmer-level data is limited to the responsible kebele, woreda, zone and region');
+    if (!UNIT_LEVELS.includes(level as UnitLevel)) return;
+    const unit = await this.hierarchy.unitRef(level as UnitLevel, id);
+    if (!unit) return; // unknown unit: the drill-down answers 404
+    if (level === 'KEBELE') assertInScope(user, unit, 'kebele');
+    else assertUnitVisible(user, unit);
+  }
+
+  /** National views list regions; field officers see only their own (IMPLEMENTATION_ROADMAP §5, decision 4). */
+  private async regionVisible(user: AuthUser): Promise<(regionId: string) => boolean> {
+    if (isNational(user)) return () => true;
+    const refs = new Map<string, boolean>();
+    for (const r of await this.hierarchy.adminUnits.children('ET')) refs.set(r.id, unitVisible(user, { regionId: r.id, path: r.path }));
+    return id => refs.get(id) ?? false;
   }
 
   @Get('drilldown')
@@ -55,6 +60,10 @@ export class AggregationController {
     if (level !== 'NATIONAL' && !id) throw Errors.badRequest('id is required below NATIONAL level');
     if (id) await this.checkDrillScope(user, level, id);
     const result = await this.aggregation.drilldown(level, id || null);
+    if (level === 'NATIONAL') {
+      const visible = await this.regionVisible(user);
+      result.children = (result.children as any[]).filter(c => visible(c.id));
+    }
     if (format === 'csv') {
       await this.audit.record(user, 'DATA_EXPORT', `AGGREGATION/${level}/${id || 'ETH'}`, { format: 'csv' }, ctx);
       res.type('text/csv').attachment(`efmis-${level.toLowerCase()}-${id || 'national'}.csv`);
@@ -71,7 +80,9 @@ export class AggregationController {
   @Get('national')
   @RequirePermissions('national:read', 'aggregation:read')
   @ApiOperation({ summary: 'Gross national demand with reconciliation against regional approvals (REQ-1.3-001)' })
-  national() {
-    return this.aggregation.nationalSummary();
+  async national(@CurrentUser() user: AuthUser) {
+    const summary = await this.aggregation.nationalSummary();
+    const visible = await this.regionVisible(user);
+    return { ...summary, regions: summary.regions.filter(r => visible(r.id)), regionsWithPartialData: summary.regionsWithPartialData.filter(r => visible(r.id)) };
   }
 }
