@@ -26,8 +26,8 @@ export class DashboardController {
 
   @Get('dashboard/overview')
   @ApiOperation({ summary: 'Landing KPIs (HeroStats) and workflow pipeline' })
-  overview() {
-    return this.svc.overview();
+  overview(@CurrentUser() user: AuthUser) {
+    return this.svc.overview(user);
   }
 
   @Get('dashboard')
@@ -39,7 +39,7 @@ export class DashboardController {
   @Post('copilot/ask')
   @HttpCode(200)
   @ApiOperation({ summary: 'EFMIS Copilot: rule-based answers from live data { reply, action, time }' })
-  ask(@Body() dto: CopilotAskDto) {
-    return this.svc.ask(dto);
+  ask(@Body() dto: CopilotAskDto, @CurrentUser() user: AuthUser) {
+    return this.svc.ask(dto, user);
   }
 }

@@ -14,6 +14,8 @@ import { AuditService } from '../audit/audit.service';
 import { CommentsService } from '../comments/comments.service';
 import { Alert } from './entities/alert.entity';
 import { AlertsService } from './alerts.service';
+import { AdminUnitsService } from '../admin-units/admin-units.service';
+import { assertInScope, isNational } from '../../common/utils/scope';
 
 // ---------------- DTOs ----------------
 class CreateAlertDto {
@@ -23,6 +25,10 @@ class CreateAlertDto {
   @ApiPropertyOptional() @IsOptional() @IsString() trigger?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() affectedArea?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() actionRequired?: string;
+  @ApiPropertyOptional({ description: "Unit the alert concerns (default: the reporter's own unit; national roles may omit it)" })
+  @IsOptional()
+  @IsString()
+  unitId?: string;
 }
 
 class AssignAlertDto {
@@ -62,6 +68,7 @@ export class AlertsController {
     private readonly alerts: AlertsService,
     private readonly audit: AuditService,
     private readonly comments: CommentsService,
+    private readonly units: AdminUnitsService,
     @InjectDataSource() private readonly ds: DataSource
   ) {}
 
@@ -71,11 +78,18 @@ export class AlertsController {
     return a;
   }
 
+  /** An alert the user may see (403 OUT_OF_SCOPE for another area's alert). */
+  private async getVisible(user: AuthUser, id: string, m?: EntityManager): Promise<Alert> {
+    const a = await this.get(id, m);
+    await this.alerts.assertVisible(user, a);
+    return a;
+  }
+
   /** Load, mutate (inside a transaction), audit, return the updated alert. */
   private async transition(id: string, action: string, user: AuthUser, details: unknown, ctx: RequestContext,
     mutate: (a: Alert, m: EntityManager) => Promise<unknown>) {
     return this.ds.transaction(async m => {
-      const a = await this.get(id, m);
+      const a = await this.getVisible(user, id, m);
       await mutate(a, m);
       await this.audit.record(user, `ALERT_${action}`, a.id, details ?? {}, ctx, m);
       return this.alerts.toFrontend(await this.get(a.id, m));
@@ -85,13 +99,13 @@ export class AlertsController {
   @Get()
   @RequirePermissions('alerts:read')
   @ApiOperation({ summary: 'List alerts (severity, category, resolved, status; page/pageSize) — open first, by severity then newest' })
-  async list(@Query() q: AlertListQuery, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+  async list(@Query() q: AlertListQuery, @CurrentUser() user: AuthUser, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const qb = this.alerts.repo.createQueryBuilder('a');
     if (q.severity) qb.andWhere('a.severity = :severity', { severity: q.severity });
     if (q.category) qb.andWhere('a.category = :category', { category: q.category });
     if (q.resolved !== undefined) qb.andWhere('a.resolved = :resolved', { resolved: q.resolved === 'true' });
     if (q.status) qb.andWhere('a.status = :status', { status: q.status });
-    const rows = await qb.getMany();
+    const rows = await this.alerts.visibleTo(user, await qb.getMany());
     rows.sort((x, y) => Number(x.resolved) - Number(y.resolved)
       || (SEVERITY_RANK[x.severity] ?? 3) - (SEVERITY_RANK[y.severity] ?? 3)
       || (y.timestamp || '').localeCompare(x.timestamp || ''));
@@ -101,8 +115,8 @@ export class AlertsController {
   @Get('summary')
   @RequirePermissions('alerts:read')
   @ApiOperation({ summary: 'Open / resolved counts, by severity and category, SLA breaches' })
-  async summary() {
-    const rows = (await this.alerts.repo.find()).map(r => this.alerts.toFrontend(r));
+  async summary(@CurrentUser() user: AuthUser) {
+    const rows = (await this.alerts.visibleTo(user, await this.alerts.repo.find())).map(r => this.alerts.toFrontend(r));
     const open = rows.filter(a => !a.resolved);
     return {
       open: open.length,
@@ -117,8 +131,8 @@ export class AlertsController {
   @Get(':id')
   @RequirePermissions('alerts:read')
   @ApiOperation({ summary: 'Alert detail with comment thread and audit history' })
-  async detail(@Param('id') id: string) {
-    const a = await this.get(id);
+  async detail(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    const a = await this.getVisible(user, id);
     const comments = await this.comments.list('ALERT', a.id);
     return {
       ...this.alerts.toFrontend(a),
@@ -131,8 +145,11 @@ export class AlertsController {
   @RequirePermissions('alerts:create')
   @ApiOperation({ summary: 'Raise a manual alert (routed to PMO / MoA per severity)' })
   async create(@Body() dto: CreateAlertDto, @CurrentUser() user: AuthUser, @ReqCtx() ctx: RequestContext) {
+    const unitId = dto.unitId ?? (isNational(user) ? null : user.adminUnitId ?? null);
+    if (unitId) assertInScope(user, await this.units.unitRef(unitId), 'unit');
+    else if (!isNational(user)) throw Errors.outOfScope('unit');
     return this.ds.transaction(async m => {
-      const a = await this.alerts.raise({ ...dto, sourceType: 'MANUAL', sourceId: user.id }, m);
+      const a = await this.alerts.raise({ ...dto, unitId, sourceType: 'MANUAL', sourceId: user.id }, m);
       await this.audit.record(user, 'ALERT_RAISED', a.id, dto, ctx, m);
       return a;
     });

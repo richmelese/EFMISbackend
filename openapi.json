@@ -12470,6 +12470,10 @@
           },
           "actionRequired": {
             "type": "string"
+          },
+          "unitId": {
+            "type": "string",
+            "description": "Unit the alert concerns (default: the reporter's own unit; national roles may omit it)"
           }
         },
         "required": [

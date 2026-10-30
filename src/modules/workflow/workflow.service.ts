@@ -16,7 +16,7 @@ import { ApprovalAction } from './entities/approval-action.entity';
 import { WorkflowCase } from './entities/workflow-case.entity';
 import { AvailableActionDto, WorkflowCaseDto, WorkflowHistoryEntryDto } from './dto/workflow.dto';
 import { WorkflowRegistry } from './workflow.registry';
-import { transitionFor, WorkflowAdvanced, WorkflowDefinition, WorkflowEscalated } from './workflow.types';
+import { DEFAULT_NOTIFY_CHANNELS, transitionFor, WorkflowAdvanced, WorkflowDefinition, WorkflowEscalated } from './workflow.types';
 
 export interface ActInput {
   pin?: string;
@@ -35,7 +35,8 @@ const addHours = (from: Date, h: number) => new Date(from.getTime() + h * 3_600_
 /**
  * Generic workflow engine (Stage B4). Domain modules register definitions (WorkflowRegistry), open cases inside their
  * own transactions and react to WorkflowAdvanced. Every action checks transition + permission + scope, signs when
- * required, writes workflow_actions + audit, publishes the event and notifies the next assignee — atomically.
+ * required, writes workflow_actions + audit, publishes the event and notifies the next assignee (in-app + outbox) —
+ * atomically.
  */
 @Injectable()
 export class WorkflowService {
@@ -268,7 +269,8 @@ export class WorkflowService {
             const targetType = (await this.units.byId(target, tx)).type;
             await this.notifications.notify({
               role: targetType === 'COUNTRY' ? 'MOA' : targetType, unitId: targetType === 'COUNTRY' ? null : target,
-              title: `Escalation: ${c.definition} overdue`, link: `/workflow/cases/${c.id}`, channels: ['IN_APP', 'EMAIL'],
+              title: `Escalation: ${c.definition} overdue`, link: `/workflow/cases/${c.id}`,
+              channels: [...new Set([...(def.notifyChannels ?? DEFAULT_NOTIFY_CHANNELS), 'EMAIL' as const])],
               message: `${c.entityType} ${c.entityId} has been ${c.status} at ${c.assigneeUnitId} past its deadline (escalation level ${level})`
             }, tx);
             await this.events.publish(new WorkflowEscalated(c.id, c.definition, level, target), tx);
@@ -326,7 +328,10 @@ export class WorkflowService {
     const national = unit?.type === 'COUNTRY';
     for (const { base } of rows) {
       if (NATIONAL_ROLES.includes(base) !== national) continue;
-      await this.notifications.notify({ role: base, unitId: national ? null : unitId, title, message, link: `/workflow/cases/${c.id}` }, m);
+      await this.notifications.notify(
+        { role: base, unitId: national ? null : unitId, title, message, link: `/workflow/cases/${c.id}`, channels: [...(def.notifyChannels ?? DEFAULT_NOTIFY_CHANNELS)] },
+        m
+      );
     }
   }
 }

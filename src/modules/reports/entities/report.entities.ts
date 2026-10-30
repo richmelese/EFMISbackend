@@ -39,6 +39,8 @@ export class ReportRegion {
   @Column({ type: 'varchar', length: 120, nullable: true }) amharic: string | null;
   @Column({ type: 'varchar', length: 40, nullable: true }) color: string | null;
   @Column({ type: 'int' }) sort: number;
+  /** admin_units region this report region belongs to (data scope); null = national-only */
+  @Column({ type: 'varchar', length: 40, nullable: true }) adminUnitId: string | null;
 }
 
 /** Vessel lot dispatched to a region's unions */

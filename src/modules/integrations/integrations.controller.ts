@@ -68,8 +68,8 @@ export class IntegrationsController {
   @Get('logistics')
   @RequirePermissions('integrations:read')
   @ApiOperation({ summary: 'Logistics status: GPS fleet (page/pageSize), bottlenecks, warehouse utilisation (REQ-INT-003)' })
-  logistics(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    return this.svc.logistics(items => paginate(req, res, items));
+  logistics(@CurrentUser() user: AuthUser, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return this.svc.logistics(user, items => paginate(req, res, items));
   }
 
   @Put('logistics/trucks/:truckId')
@@ -90,8 +90,8 @@ export class IntegrationsController {
   @Get('financials')
   @RequirePermissions('integrations:read')
   @ApiOperation({ summary: 'Farmer sales, repayment and ECX prices (REQ-INT-004)' })
-  financials() {
-    return this.svc.financials();
+  financials(@CurrentUser() user: AuthUser) {
+    return this.svc.financials(user);
   }
 
   @Put('financials/ecx-prices/:commodity')

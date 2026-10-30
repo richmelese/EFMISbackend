@@ -301,6 +301,7 @@ export class QuotaService {
         await this.alerts.raise({
           severity: 'MEDIUM_YELLOW', title: `Delivery discrepancy: ${a.recipientName}`, category: 'Logistics & Warehousing',
           trigger: `Delivered ${received} MT vs planned ${total} MT`, affectedArea: a.recipientName, sourceType: 'QUOTA_ALLOCATION', sourceId: a.id,
+          unitId: a.unitId && (await this.adminUnits.findById(a.unitId, m)) ? a.unitId : a.regionId,
           dedupeKey: `DISCREPANCY-${a.id}-${received}`
         }, m);
       }

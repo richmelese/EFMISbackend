@@ -31,6 +31,9 @@ export class Alert {
   @Column({ type: 'text', nullable: true }) snoozeReason: string | null;
   @Column({ type: 'varchar', length: 30, nullable: true }) sourceType: string | null;
   @Column({ type: 'varchar', length: 80, nullable: true }) sourceId: string | null;
+  /** Administrative unit the alert concerns (data scope); null = national / operational (national roles only) */
+  @Index('IDX_alerts_unit_id')
+  @Column({ type: 'varchar', length: 40, nullable: true }) unitId: string | null;
   /** Prevents automated conditions from raising duplicates */
   @Index({ unique: true, where: 'dedupe_key IS NOT NULL' })
   @Column({ type: 'varchar', length: 160, nullable: true })

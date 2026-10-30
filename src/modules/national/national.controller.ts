@@ -27,8 +27,8 @@ export class NationalController {
   @Get('gross-demand')
   @RequirePermissions('national:read', 'ftwg:participate')
   @ApiOperation({ summary: 'Gross national demand with reconciliation (REQ-1.3-001)' })
-  grossDemand() {
-    return this.national.grossDemand();
+  grossDemand(@CurrentUser() user: AuthUser) {
+    return this.national.grossDemand(user);
   }
 
   @Get('net-import')
@@ -132,15 +132,15 @@ export class NationalController {
   @Get('documents')
   @RequirePermissions('national:read', 'ftwg:participate')
   @ApiOperation({ summary: 'List demand documents (newest first)' })
-  listDocuments() {
-    return this.national.listDocuments();
+  listDocuments(@CurrentUser() user: AuthUser) {
+    return this.national.listDocuments(user);
   }
 
   @Get('documents/latest')
   @RequirePermissions('national:read', 'ftwg:participate')
   @ApiOperation({ summary: 'Latest demand document' })
-  async latestDocument() {
-    const d = await this.national.latestDocument();
+  async latestDocument(@CurrentUser() user: AuthUser) {
+    const d = await this.national.latestDocumentFor(user);
     if (!d) throw Errors.notFound('Demand document');
     return d;
   }

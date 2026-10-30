@@ -4,6 +4,7 @@ import { DataSource, In, Repository } from 'typeorm';
 import { DailySummaryDate, DailySummaryRecord, DispatchWaybill, LotUnion, ReportRegion, UnionDailyLoad, VesselLot } from './entities/report.entities';
 import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { Errors } from '../../common/utils/errors';
+import { isNational, visibleRows } from '../../common/utils/scope';
 import { round, stamp, toCsv } from '../../common/utils/helpers';
 import { AuditService } from '../audit/audit.service';
 import { AddLotUnionDto, CreateLotDto, CreateReportDateDto, DailySummaryQuery, DispatchEntryDto, LotDateDto, UnionLoadDto, UpdateDailyRecordDto } from './dto/reports.dto';
@@ -59,31 +60,51 @@ export class ReportsService {
     };
   }
 
+  // ===================== Data scope =====================
+  /**
+   * Report regions the user may read: all for national roles; for regional officers the report regions mapped to
+   * their own region (report_regions.admin_unit_id). Unmapped report regions are national-only.
+   */
+  private async readableRegions(user: AuthUser): Promise<Set<string> | null> {
+    if (isNational(user)) return null;
+    const rows = await this.reportRegions.find();
+    return new Set(visibleRows(user, rows, rr => (rr.adminUnitId ? { regionId: rr.adminUnitId } : null)).map(rr => rr.id));
+  }
+
+  private async assertRegion(user: AuthUser, regionId: string): Promise<void> {
+    const readable = await this.readableRegions(user);
+    if (readable && !readable.has(regionId)) throw Errors.outOfScope('region');
+  }
+
   async datesOut() {
     const rows = await this.dates.find({ order: { sort: 'ASC' } });
     return rows.map((d, i) => ({ id: d.id, label: d.label, isLatest: i === rows.length - 1 }));
   }
 
-  async recordsFor(date: string | undefined) {
+  async recordsFor(date: string | undefined, user?: AuthUser) {
     if (!date) return [];
-    return (await this.records.find({ where: { dateId: date }, order: { sort: 'ASC' } })).map(r => this.recordOut(r));
+    const readable = user ? await this.readableRegions(user) : null;
+    return (await this.records.find({ where: { dateId: date }, order: { sort: 'ASC' } }))
+      .filter(r => !readable || readable.has(r.regionId))
+      .map(r => this.recordOut(r));
   }
 
-  async all() {
+  async all(user: AuthUser) {
     const dates = await this.datesOut();
     const recordsByDate: Record<string, RecordOut[]> = {};
     for (const d of dates) {
-      const recs = await this.recordsFor(d.id);
+      const recs = await this.recordsFor(d.id, user);
       if (recs.length) recordsByDate[d.id] = recs;
     }
     return { dates, recordsByDate };
   }
 
-  async summary(q: DailySummaryQuery) {
+  async summary(q: DailySummaryQuery, user: AuthUser) {
     const dates = await this.datesOut();
     const date = q.date || dates[dates.length - 1]?.id;
     if (!date || !(await this.dates.exist({ where: { id: date } }))) throw Errors.notFound('Report date');
-    let records = await this.recordsFor(date);
+    if (q.regionId && q.regionId !== 'ALL') await this.assertRegion(user, q.regionId);
+    let records = await this.recordsFor(date, user);
     if (q.regionId && q.regionId !== 'ALL') records = records.filter(r => r.regionId === q.regionId);
     if (q.fertilizerType && q.fertilizerType !== 'ALL') records = records.filter(r => r.fertilizerType === q.fertilizerType);
     if (q.q) {
@@ -139,7 +160,7 @@ export class ReportsService {
 
   async exportCsv(user: AuthUser, date: string | undefined, ctx: RequestContext) {
     const d = date || (await this.datesOut()).slice(-1)[0]?.id;
-    const recs = await this.recordsFor(d);
+    const recs = await this.recordsFor(d, user);
     await this.audit.record(user, 'DATA_EXPORT', `DAILY_SUMMARY/${d}`, { rows: recs.length }, ctx);
     const header = ['ክልል (Region)', 'የማዳበሪያ ዓይነት (Type)', 'ከውጭ የተገዛ (Procured MT)', 'በክልል ደረጃ (Regional Stock MT)', 'የዓመቱ ዕቅድ (Annual Plan MT)', 'የተላከ (Dispatched MT)', 'አፈፃፀም % (Dispatch)',
       'ከወደብ የገባ እስከ ቀኑ (Port Cumulative MT)', 'ከወደብ የገባ በዚህ ቀን (Port Daily MT)', 'አፈፃፀም % (Port)', 'በክልሉ ያለ ማዳበሪያ (Region Stock MT)', 'ከወደብ የደረሰ (Delivered MT)', 'ወረፋ/ልዩነት (Queue MT)', 'ወደ ማዕከል በዚህ ሳምንት (Hub Week MT)', 'ወደ ማዕከል እስከዚህ ሳምንት (Hub Cumulative MT)'];
@@ -181,14 +202,21 @@ export class ReportsService {
     return l;
   }
 
-  async regions() {
-    return (await this.reportRegions.find({ order: { sort: 'ASC' } })).map(r => ({ id: r.id, name: r.name, amharic: r.amharic, color: r.color }));
+  async regions(user: AuthUser) {
+    const readable = await this.readableRegions(user);
+    return (await this.reportRegions.find({ order: { sort: 'ASC' } }))
+      .filter(r => !readable || readable.has(r.id))
+      .map(r => ({ id: r.id, name: r.name, amharic: r.amharic, color: r.color }));
   }
 
   /** { regionId: [lots] } or the lots of one region */
-  async listLots(regionId?: string) {
-    if (regionId) return this.lotsOut(await this.lots.find({ where: { regionId }, order: { sort: 'ASC' } }));
-    const all = await this.lots.find({ order: { regionId: 'ASC', sort: 'ASC' } });
+  async listLots(user: AuthUser, regionId?: string) {
+    if (regionId) {
+      await this.assertRegion(user, regionId);
+      return this.lotsOut(await this.lots.find({ where: { regionId }, order: { sort: 'ASC' } }));
+    }
+    const readable = await this.readableRegions(user);
+    const all = (await this.lots.find({ order: { regionId: 'ASC', sort: 'ASC' } })).filter(l => !readable || readable.has(l.regionId));
     const outs = await this.lotsOut(all);
     const out: Record<string, any[]> = {};
     all.forEach((l, i) => (out[l.regionId] ||= []).push(outs[i]));
@@ -263,8 +291,9 @@ export class ReportsService {
     };
   }
 
-  async dispatches(lotId: string) {
+  async dispatches(user: AuthUser, lotId: string) {
     const lot = await this.getLot(lotId);
+    await this.assertRegion(user, lot.regionId);
     const rows = await this.waybills.find({ where: { lotId: lot.lotId }, order: { id: 'DESC' } });
     const unions = await this.unions.find({ where: { lotId: lot.lotId } });
     const names = new Map(unions.map(u => [u.id, u.unionName]));
@@ -301,6 +330,7 @@ export class ReportsService {
 
   async regionalExport(user: AuthUser, regionId: string | undefined, ctx: RequestContext) {
     if (!regionId) throw Errors.badRequest('regionId is required');
+    await this.assertRegion(user, regionId);
     const lots = await this.lotsOut(await this.lots.find({ where: { regionId }, order: { sort: 'ASC' } }));
     const rows: unknown[][] = [];
     for (const l of lots) {

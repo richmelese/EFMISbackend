@@ -195,6 +195,12 @@ describe('Architecture Stage B (e2e)', () => {
       expect(zone.body.some((n: any) => n.title === 'TEST_PACKAGE_REVIEW: PENDING_ZONE')).toBe(true);
       const lume = await t.call('get', '/notifications', tok.LUME);
       expect(lume.body.some((n: any) => n.title === 'TEST_PACKAGE_REVIEW: PENDING_ZONE')).toBe(false);
+      // …and through the outbox (EMAIL by default) to the zone's officers
+      const [mail] = await t.app.get(DataSource).query(
+        `SELECT payload FROM outbox_messages WHERE channel = 'EMAIL' AND payload->>'title' = 'TEST_PACKAGE_REVIEW: PENDING_ZONE'`
+      );
+      expect(mail.payload.to).toContain(SEED_USERS.EAST_SHEWA_ZONE);
+      expect(mail.payload.to).not.toContain(SEED_USERS.LUME_WOREDA);
     });
 
     it('return goes back to the origin unit; comments required', async () => {

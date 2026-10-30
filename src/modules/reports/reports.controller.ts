@@ -23,8 +23,8 @@ export class ReportsController {
   @Get('daily-summary/all')
   @RequirePermissions('reports:read')
   @ApiOperation({ summary: 'Full structure { dates, recordsByDate }' })
-  all() {
-    return this.svc.all();
+  all(@CurrentUser() user: AuthUser) {
+    return this.svc.all(user);
   }
 
   @Get('daily-summary/export')
@@ -38,8 +38,8 @@ export class ReportsController {
   @Get('daily-summary')
   @RequirePermissions('reports:read')
   @ApiOperation({ summary: 'Daily summary for a date (?date, regionId, fertilizerType, q) with grand totals and region groups' })
-  summary(@Query() q: DailySummaryQuery) {
-    return this.svc.summary(q);
+  summary(@Query() q: DailySummaryQuery, @CurrentUser() user: AuthUser) {
+    return this.svc.summary(q, user);
   }
 
   @Put('daily-summary/:date/:regionId/:fertilizerType')
@@ -61,15 +61,15 @@ export class ReportsController {
   @Get('regional/regions')
   @RequirePermissions('reports:read')
   @ApiOperation({ summary: 'Report regions' })
-  regions() {
-    return this.svc.regions();
+  regions(@CurrentUser() user: AuthUser) {
+    return this.svc.regions(user);
   }
 
   @Get('regional/lots')
   @RequirePermissions('reports:read')
   @ApiOperation({ summary: 'Vessel lots: { regionId: [lots] } or one region with ?regionId=' })
-  lots(@Query('regionId') regionId?: string) {
-    return this.svc.listLots(regionId);
+  lots(@CurrentUser() user: AuthUser, @Query('regionId') regionId?: string) {
+    return this.svc.listLots(user, regionId);
   }
 
   @Post('regional/lots')
@@ -96,8 +96,8 @@ export class ReportsController {
   @Get('regional/lots/:lotId/dispatches')
   @RequirePermissions('reports:read')
   @ApiOperation({ summary: 'Waybills recorded for a lot' })
-  dispatches(@Param('lotId') lotId: string) {
-    return this.svc.dispatches(lotId);
+  dispatches(@Param('lotId') lotId: string, @CurrentUser() user: AuthUser) {
+    return this.svc.dispatches(user, lotId);
   }
 
   @Post('regional/lots/:lotId/dates')

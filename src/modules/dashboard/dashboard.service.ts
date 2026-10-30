@@ -7,7 +7,7 @@ import { DemandDocument } from '../national/entities/demand-document.entities';
 import { PurchaseOrder, QuotaAdjustmentRequest, QuotaAllocation, QuotaLetter } from '../quota/entities/quota.entities';
 import { can } from '../../common/constants/permissions';
 import { AuthUser } from '../../common/types/auth-user';
-import { isNational, scopeCondition } from '../../common/utils/scope';
+import { isNational, scopeCondition, visibleRows } from '../../common/utils/scope';
 import { nowStamp, stamp } from '../../common/utils/helpers';
 import { SettingsService } from '../settings/settings.service';
 import { UsersService } from '../users/users.service';
@@ -63,8 +63,9 @@ export class DashboardService {
     return (await this.hierarchy.fertilizerTypes.find()).map(f => ({ code: f.code, name: f.name, unit: f.unit, color: f.color, desc: f.description }));
   }
 
-  private async openAlerts() {
-    const rows = await this.alerts.repo.find({ where: { resolved: false }, order: { timestamp: 'DESC' } });
+  /** Open alerts the user may see (their area; operational alerts for national roles). */
+  private async openAlerts(u: AuthUser) {
+    const rows = await this.alerts.visibleTo(u, await this.alerts.repo.find({ where: { resolved: false }, order: { timestamp: 'DESC' } }));
     return rows.map(a => this.alerts.toFrontend(a));
   }
 
@@ -120,22 +121,22 @@ export class DashboardService {
         ...ls,
         bottlenecks: (await i.bottlenecks.find({ order: { id: 'ASC' } })).map(b => ({ location: b.location, delayHours: b.delayHours, cause: b.cause })),
         gpsFleet: await this.logisticsView.gpsFleet(),
-        warehouseUtilization: await this.logisticsView.warehouseUtilization()
+        warehouseUtilization: visibleRows(u, await this.logisticsView.warehouseUtilization(), w => (w.regionId ? { regionId: w.regionId } : null), true)
       } : null,
       qualityControl: canIntegrations ? { ...qs, inspections: await i.inspectionsData() } : null,
       financials: { ...fin, ecxMarketPrices: await i.ecxOut() },
-      criticalAlerts: (await this.alerts.repo.find({ order: { resolved: 'ASC', timestamp: 'DESC' } })).map(a => this.alerts.toFrontend(a)),
+      criticalAlerts: (await this.alerts.visibleTo(u, await this.alerts.repo.find({ order: { resolved: 'ASC', timestamp: 'DESC' } }))).map(a => this.alerts.toFrontend(a)),
       auditTrail: canAudit ? await this.audit.list({ limit: 200 }) : []
     };
   }
 
   // ---------------- GET /dashboard/overview ----------------
-  async overview() {
+  async overview(u: AuthUser) {
     const net = await this.nationalFigures.netImport();
     const fin = (await this.settings.get<any>('financialSummary', {})) || {};
     const qs = (await this.settings.get<any>('qualitySummary', {})) || {};
     const ls = (await this.settings.get<any>('logisticsSummary', {})) || {};
-    const open = await this.openAlerts();
+    const open = await this.openAlerts(u);
     const regs = await this.regions.find();
     const doc = await this.latestDocument();
     const poCount = await this.purchaseOrders.count();
@@ -211,7 +212,7 @@ export class DashboardService {
         purchaseOrders: (await this.purchaseOrders.find({ order: { createdAt: 'DESC' }, take: 5 })).map(p => ({ controlNo: p.controlNo, status: p.status }))
       };
     }
-    const open = await this.openAlerts();
+    const open = await this.openAlerts(u);
     widgets.alerts = {
       critical: open.filter(a => a.severity === 'CRITICAL_RED').length, high: open.filter(a => a.severity === 'HIGH_ORANGE').length,
       medium: open.filter(a => a.severity === 'MEDIUM_YELLOW').length, low: open.filter(a => a.severity === 'LOW_BLUE').length
@@ -221,7 +222,7 @@ export class DashboardService {
   }
 
   // ---------------- POST /copilot/ask (rule-based, answers from live data) ----------------
-  async ask(dto: CopilotAskDto) {
+  async ask(dto: CopilotAskDto, u: AuthUser) {
     const text = dto.message.toLowerCase();
     const am = (dto.lang || 'en') === 'am';
     const fmt = (n: number) => Math.round(n).toLocaleString('en-US');
@@ -236,21 +237,26 @@ export class DashboardService {
       reply = `**${am ? 'የጅቡቲ ወደብ መረጃ' : 'Port Djibouti Vessel Status'}:**\n` + vs.map(v => `• **${v.name}** (${v.cargo}) — ${v.berthingStatus}; ETA ${v.etaDjibouti}; demurrage risk ${v.demurrageRisk}`).join('\n');
       action = { label: am ? 'የሎጅስቲክስ ክትትልን እይ' : 'View Logistics Fleet Telemetry', module: 'logistics' };
     } else if (/soil|nsis|oromia|hafas|አፈር|ኦሮሚያ/.test(text)) {
-      const p = await this.external.nsisProfile('REG-OROMIA');
-      reply = p
+      // national roles: the Oromia showcase; field officers: their own region
+      const soilRegion = isNational(u) ? 'REG-OROMIA' : u.regionId;
+      const own = soilRegion && soilRegion !== 'REG-OROMIA' ? await this.regions.findOneBy({ id: soilRegion }) : null;
+      const p = soilRegion ? await this.external.nsisProfile(soilRegion) : null;
+      reply = p && own
+        ? `**HaFAS ${am ? 'ምክረ-ሃሳብ' : 'Recommendation'} — ${own.name}:**\n• P deficiency ${p.deficiencies.P}%, B deficiency ${p.deficiencies.B}%, acidic area ${p.acidity.acidicAreaPct}%\n• Recommended rates: NPSB ${p.recommendedRatesKgHa.NPSB} kg/ha, Urea ${p.recommendedRatesKgHa.UREA} kg/ha\n• Confidence: ${p.confidence} (${p.verifiedPct}% verified)`
+        : p && soilRegion === 'REG-OROMIA'
         ? `**HaFAS ${am ? 'ምክረ-ሃሳብ ለኦሮሚያ' : 'Recommendation for Oromia'}:**\n• P deficiency ${p.deficiencies.P}%, B deficiency ${p.deficiencies.B}%, acidic area ${p.acidity.acidicAreaPct}%\n• Prescribed: **70% Fortified NPSB + 30% Granular Urea** (NPSB ${p.recommendedRatesKgHa.NPSB} kg/ha, Urea ${p.recommendedRatesKgHa.UREA} kg/ha)\n• Confidence: ${p.confidence} (${p.verifiedPct}% verified)`
-        : (am ? 'የNSIS የአፈር መረጃ ለኦሮሚያ አልተገኘም።' : 'NSIS soil profile for Oromia is not available.');
+        : (am ? 'የNSIS የአፈር መረጃ አልተገኘም።' : 'The NSIS soil profile for your region is not available.');
       action = { label: am ? 'የNSIS የአፈር ካርታን መርምር' : 'Inspect NSIS Geospatial Map', module: 'regionalSoil' };
     } else if (/telebirr|collection|payment|credit|repay|ቴሌብር|ሽያጭ/.test(text)) {
       const f = (await this.settings.get<any>('financialSummary', {})) || {};
       reply = `**${am ? 'የዲጂታል ፋይናንስና የብድር ሁኔታ' : 'Digital Fertilizer Finance & Credit Status'}:**\n• Total sales: **${f.totalSalesETB}**\n• TeleBirr: **${f.telebirrCollectionETB}**\n• CBE vouchers: ${f.cbeBankVoucherETB}\n• Repayment rate: **${f.nationalRepaymentRate}%**`;
       action = { label: am ? 'የሽያጭና ፋይናንስ ዳሽቦርድ ክፈት' : 'Open Sales & Financial Dashboard', module: 'farmerSales' };
     } else if (/alert|critical|sla|ማስጠንቀቂያ/.test(text)) {
-      const open = await this.openAlerts();
+      const open = await this.openAlerts(u);
       reply = `**${open.length} open alerts**\n` + open.slice(0, 5).map(a => `• [${a.severity}] ${a.title} — SLA ${a.slaHoursRemaining}h remaining`).join('\n');
       action = { label: am ? 'የማስጠንቀቂያ ማዕከል' : 'Open Critical Alert Center', module: 'criticalAlerts' };
     } else if (/quota|allocation|ኮታ/.test(text)) {
-      const regs = await this.regions.find({ order: { quotaAllocationMt: 'DESC' }, take: 5 });
+      const regs = visibleRows(u, await this.regions.find({ order: { quotaAllocationMt: 'DESC' } }), r => ({ regionId: r.id })).slice(0, 5);
       reply = `**${am ? 'የክልል ኮታ' : 'Regional quotas'}:**\n` + regs.map(r => `• ${r.name}: ${fmt(r.quotaAllocationMt)} MT`).join('\n');
       action = { label: am ? 'የኮታ ድልድል ክፈት' : 'Open Quota Allocation', module: 'quotaAllocation' };
     } else {

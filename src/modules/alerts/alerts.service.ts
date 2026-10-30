@@ -7,6 +7,11 @@ import { nowStamp, stamp } from '../../common/utils/helpers';
 import { NotificationsService } from '../notifications/notifications.service';
 import { DomainEvents } from '../../common/events';
 import { OutboxProblem } from '../outbox/outbox.types';
+import { AdminUnitsService } from '../admin-units/admin-units.service';
+import { AuthUser } from '../../common/types/auth-user';
+import { Errors } from '../../common/utils/errors';
+import { isNational, visibleRows } from '../../common/utils/scope';
+import { AREA_SOURCE_TYPES } from './alert-units';
 
 const PMO_STATUS: Record<string, string> = { CRITICAL_RED: 'ESCALATED_TO_PMO', HIGH_ORANGE: 'NOTIFIED_MOA', MEDIUM_YELLOW: 'NORMAL', LOW_BLUE: 'NORMAL' };
 
@@ -21,6 +26,8 @@ export interface RaiseAlertInput {
   sourceId?: string | null;
   /** Same key => no duplicate alert (automated conditions) */
   dedupeKey?: string | null;
+  /** Administrative unit the alert concerns (default: the source when it is a kebele/woreda/zone/region; else national) */
+  unitId?: string | null;
   slaHours?: number;
   /** Override the notified roles (default: MoA, plus PMO for CRITICAL; logistics categories go to logistics roles) */
   notifyRoles?: string[];
@@ -35,8 +42,24 @@ export class AlertsService implements OnModuleInit {
   constructor(
     @InjectRepository(Alert) readonly repo: Repository<Alert>,
     private readonly notifications: NotificationsService,
-    private readonly events: DomainEvents
+    private readonly events: DomainEvents,
+    private readonly units: AdminUnitsService
   ) {}
+
+  /**
+   * Data scope: field officers see alerts of units inside or above theirs; alerts without a unit (vessels, quality,
+   * trucks, messaging …) are operational and go to national roles only.
+   */
+  async visibleTo<T extends { unitId: string | null }>(user: AuthUser, rows: T[]): Promise<T[]> {
+    if (isNational(user)) return rows;
+    const paths = new Map<string, string | null>();
+    for (const id of new Set(rows.map(r => r.unitId).filter((u): u is string => !!u))) paths.set(id, await this.units.pathOf(id));
+    return visibleRows(user, rows, r => (r.unitId ? { path: paths.get(r.unitId) ?? null } : null));
+  }
+
+  async assertVisible(user: AuthUser, alert: { unitId: string | null }): Promise<void> {
+    if (!(await this.visibleTo(user, [alert])).length) throw Errors.outOfScope('alert');
+  }
 
   onModuleInit() {
     this.events.subscribe(OutboxProblem, (p, m) =>
@@ -66,6 +89,7 @@ export class AlertsService implements OnModuleInit {
       category: r.category,
       trigger: r.triggerText,
       affectedArea: r.affectedArea,
+      unitId: r.unitId,
       slaHoursRemaining: remaining === null ? null : Math.max(remaining, 0),
       slaBreached: remaining !== null && remaining < 0 && !r.resolved,
       pmoNotificationStatus: r.pmoNotificationStatus,
@@ -99,6 +123,8 @@ export class AlertsService implements OnModuleInit {
       if (existing) return { ...this.toFrontend(existing), created: false };
     }
     const hours = input.slaHours ?? RULES.alertSlaHours[input.severity];
+    const candidate = input.unitId ?? (input.sourceType && AREA_SOURCE_TYPES.includes(input.sourceType) ? input.sourceId : null);
+    const unitId = candidate && (await this.units.findById(candidate, manager)) ? candidate : null;
     const now = new Date();
     const alert = repo.create({
       id: await this.nextId(manager),
@@ -113,7 +139,8 @@ export class AlertsService implements OnModuleInit {
       timestamp: nowStamp(now).slice(0, 16),
       sourceType: input.sourceType ?? null,
       sourceId: input.sourceId ?? null,
-      dedupeKey: input.dedupeKey ?? null
+      dedupeKey: input.dedupeKey ?? null,
+      unitId
     });
     await repo.save(alert);
     const channels: Array<'IN_APP' | 'EMAIL' | 'SMS' | 'PUSH'> =

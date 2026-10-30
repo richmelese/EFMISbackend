@@ -13,6 +13,8 @@ import { UsersService } from '../../modules/users/users.service';
 import { Setting } from '../../modules/settings/entities/setting.entity';
 import { Season } from '../../modules/seasons/entities/season.entity';
 import { backfillAdminUnits, backfillUserUnits } from '../../modules/admin-units/admin-unit-backfill';
+import { backfillAlertUnits } from '../../modules/alerts/alert-units';
+import { backfillReportRegionUnits } from '../../modules/reports/report-region-units';
 import { seasonFromName, seasonStatusRelativeTo } from '../../modules/seasons/season-calendar';
 import { RoleEntity } from '../../modules/users/entities/role.entity';
 import { RbacService } from '../../modules/users/rbac.service';
@@ -141,6 +143,9 @@ export class SeedService {
       await this.seedReports(m);
       await this.seedAuditHistory(m);
       await this.seedDemandDocument(m);
+      // data scope of seeded alerts and report regions (same backfill as the migration)
+      await backfillAlertUnits(m);
+      await backfillReportRegionUnits(m);
     });
     // Permission catalogue + default role grants (the database is the source of truth for authorisation).
     await this.rbac.syncCatalog();

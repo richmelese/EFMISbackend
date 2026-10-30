@@ -75,6 +75,19 @@ export function containsUserUnit(user: AuthUser, unit: UnitRef): boolean {
 /** Inside the user's unit, or above it (roll-up and breadcrumb views of the areas a user belongs to). */
 export const unitVisible = (user: AuthUser, unit: UnitRef): boolean => inScope(user, unit) || containsUserUnit(user, unit);
 
+/**
+ * Rows a user may read from a list mixing areas: national roles get everything; others get rows whose unit is inside
+ * or above their unit. `unitOf` returning null means the row has no area (national-level): kept only when
+ * `keepUnitless` (national figures everyone may see), dropped otherwise (e.g. operational alerts for national roles).
+ */
+export function visibleRows<T>(user: AuthUser, rows: T[], unitOf: (row: T) => UnitRef | null, keepUnitless = false): T[] {
+  if (isNational(user)) return rows;
+  return rows.filter(r => {
+    const unit = unitOf(r);
+    return unit ? unitVisible(user, unit) : keepUnitless;
+  });
+}
+
 /** 403 OUT_OF_SCOPE unless the record's unit is inside the user's unit. */
 export function assertInScope(user: AuthUser, unit: UnitRef | null, what = 'record'): void {
   if (!unit || !inScope(user, unit)) throw Errors.outOfScope(what);

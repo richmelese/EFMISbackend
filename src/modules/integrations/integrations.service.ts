@@ -8,6 +8,7 @@ import { Region } from '../admin-units/entities/region.entity';
 import { Truck } from '../logistics/fleet/entities/fleet.entities';
 import { InventoryBalance, Product, Warehouse } from '../logistics/warehouses/entities/warehouse.entities';
 import { RULES } from '../../common/constants/rules';
+import { scopeCondition, visibleRows } from '../../common/utils/scope';
 import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { Errors } from '../../common/utils/errors';
 import { nowStamp, round, stamp } from '../../common/utils/helpers';
@@ -202,7 +203,8 @@ export class IntegrationsService {
     return (await this.logisticsView.warehouseUtilization()).map(w => this.warehouseItemOut(w));
   }
 
-  async logistics(paginateFleet: <T>(items: T[]) => T[]) {
+  /** Regional readers see warehouses of their own region plus national hubs (no region). */
+  async logistics(user: AuthUser, paginateFleet: <T>(items: T[]) => T[]) {
     const summary = await this.settings.get<any>('logisticsSummary', {});
     const fleet = await this.fleet();
     const lastIso = fleet.reduce((mx: string, t: any) => (t.lastUpdate && t.lastUpdate > mx ? t.lastUpdate : mx), '');
@@ -212,7 +214,7 @@ export class IntegrationsService {
       dailyDeliveryRateMT: summary?.dailyDeliveryRateMT,
       bottlenecks: (await this.bottlenecks.find({ order: { delayHours: 'DESC' } })).map(b => ({ location: b.location, delayHours: b.delayHours, cause: b.cause })),
       gpsFleet: paginateFleet(fleet),
-      warehouseUtilization: await this.warehouseUtilization(),
+      warehouseUtilization: visibleRows(user, await this.warehouseUtilization(), w => (w.regionId ? { regionId: w.regionId } : null), true),
       lastGpsRefresh: lastIso ? stamp(new Date(lastIso)) : ''
     };
   }
@@ -306,10 +308,12 @@ export class IntegrationsService {
   }
 
   // ---------------- REQ-INT-004 Financials ----------------
-  async financials() {
+  /** National sales / repayment figures for every reader; arrears by region and farmer counts limited to the reader's area. */
+  async financials(user: AuthUser) {
     const s = await this.settings.get<any>('financialSummary', {});
-    const regions = await this.regions.find({ order: { creditArrearsEtb: 'DESC' } });
-    const farmersWithArrears = await this.farmers.createQueryBuilder('f').where('f.creditArrearsEtb > 0').andWhere('f.deleted = false').getCount();
+    const regions = visibleRows(user, await this.regions.find({ order: { creditArrearsEtb: 'DESC' } }), r => ({ regionId: r.id }));
+    const scope = scopeCondition(user, 'f', 'kebeleId');
+    const farmersWithArrears = await this.farmers.createQueryBuilder('f').where('f.creditArrearsEtb > 0').andWhere('f.deleted = false').andWhere(scope.sql, scope.params).getCount();
     return {
       ...(s || {}),
       ecxMarketPrices: await this.ecxOut(),

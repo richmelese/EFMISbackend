@@ -8,6 +8,7 @@ import { RULES } from '../../common/constants/rules';
 import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { Errors } from '../../common/utils/errors';
 import { nowStamp, sha256, stamp, toCsv } from '../../common/utils/helpers';
+import { visibleRows } from '../../common/utils/scope';
 import { AuditService } from '../audit/audit.service';
 import { SignaturesService, SignatureCredentials } from '../signatures/signatures.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -58,20 +59,37 @@ export class NationalService {
     return manager ?? this.ds.manager;
   }
 
+  // ---------------------------------------------------------------- data scope
+  /**
+   * National totals stay visible to every reader; per-region rows are limited to the reader's own area for regional
+   * officers (IMPLEMENTATION_ROADMAP §5 decision 4).
+   */
+  private scopeRegions<T extends { regions: Array<{ id: string }>; regionsWithPartialData: Array<{ id: string }> }>(user: AuthUser, s: T): T {
+    const own = <R extends { id: string }>(rows: R[]) => visibleRows(user, rows, r => ({ regionId: r.id }));
+    return { ...s, regions: own(s.regions), regionsWithPartialData: own(s.regionsWithPartialData) };
+  }
+
+  /** The document's regional breakdown, limited to the reader's region (signatures and totals unchanged). */
+  private scopeDocument<D extends { content: any } | null>(user: AuthUser, d: D): D {
+    const rows = d?.content?.regionalBreakdown;
+    if (!d || !Array.isArray(rows)) return d;
+    return { ...d, content: { ...d.content, regionalBreakdown: visibleRows(user, rows, (r: { id: string }) => ({ regionId: r.id })) } };
+  }
+
   // ---------------------------------------------------------------- summary / figures
   async summary(user: AuthUser) {
     const latest = await this.ds.getRepository(FtwgSession).find({ order: { createdAt: 'DESC', id: 'DESC' }, take: 1 });
     return {
-      national: await this.aggregation.nationalSummary(),
+      national: this.scopeRegions(user, await this.aggregation.nationalSummary()),
       netImport: await this.figures.netImport(),
       carryOverStocks: await this.figures.carryOver(),
       ftwg: latest[0] ? await this.ftwgSession(latest[0].id, user) : null,
-      demandDocument: await this.latestDocument()
+      demandDocument: this.scopeDocument(user, await this.latestDocument())
     };
   }
 
-  grossDemand() {
-    return this.aggregation.nationalSummary();
+  async grossDemand(user: AuthUser) {
+    return this.scopeRegions(user, await this.aggregation.nationalSummary());
   }
 
   netImport() {
@@ -92,7 +110,7 @@ export class NationalService {
 
   /** Machine-readable / Excel export of the national demand. Returns either CSV text or the JSON body. */
   async exportNational(user: AuthUser, format: string | undefined, ctx: RequestContext): Promise<{ csv: string; filename: string } | Record<string, any>> {
-    const s = await this.aggregation.nationalSummary();
+    const s = this.scopeRegions(user, await this.aggregation.nationalSummary());
     await this.audit.record(user, 'DATA_EXPORT', 'NATIONAL_DEMAND', { format: format || 'json' }, ctx);
     if (format === 'csv') {
       const S = RULES.productSplit;
@@ -240,11 +258,15 @@ export class NationalService {
     };
   }
 
-  async listDocuments() {
+  async listDocuments(user: AuthUser) {
     const docs = await this.ds.getRepository(DemandDocument).find({ order: { createdAt: 'DESC', id: 'DESC' } });
     const out: any[] = [];
-    for (const d of docs) out.push(await this.docToFrontend(d));
+    for (const d of docs) out.push(this.scopeDocument(user, await this.docToFrontend(d)));
     return out;
+  }
+
+  async latestDocumentFor(user: AuthUser): Promise<any | null> {
+    return this.scopeDocument(user, await this.latestDocument());
   }
 
   async latestDocument(): Promise<any | null> {
@@ -256,7 +278,7 @@ export class NationalService {
     const d = await this.ds.getRepository(DemandDocument).findOneBy({ id });
     if (!d) throw Errors.notFound('Demand document');
     await this.audit.record(user, 'DOCUMENT_ACCESSED', d.id, null, ctx);
-    return this.docToFrontend(d);
+    return this.scopeDocument(user, await this.docToFrontend(d));
   }
 
   async createDocument(user: AuthUser, ctx: RequestContext) {

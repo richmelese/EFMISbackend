@@ -51,7 +51,8 @@ Each domain module: `<name>.module.ts`, `<name>.controller.ts` (thin: routing, D
    (any-of, from `permissions.ts`). Use `@Public()` only for health, login and the USSD gateway.
    Administrative scope is ONE rule — the record's unit is inside the user's unit (`admin_units.path <@ user path`):
    filter lists with `scopeCondition(user, 'alias', 'unitColumn?')`, check single records with `assertInScope`
-   (403 `OUT_OF_SCOPE`); read-only roll-up views of the areas above the user use `assertUnitVisible`. Never compare
+   (403 `OUT_OF_SCOPE`); read-only roll-up views of the areas above the user use `assertUnitVisible`; lists that mix
+   areas use `visibleRows(user, rows, unitOf, keepUnitless?)` — national totals stay, other areas' rows go. Never compare
    region/zone/woreda/kebele ids by hand. Every route of an area-scoped module needs a case in
    `test/scope.e2e-spec.ts` (or a written exemption) — its coverage test fails otherwise.
 3. **Validation**: request bodies are DTO classes with class-validator decorators (no `any` bodies). Validation failures
@@ -118,12 +119,22 @@ Each domain module: `<name>.module.ts`, `<name>.controller.ts` (thin: routing, D
   escalation level, version) and write-once `workflow_actions`. `act()` checks transition → permission → scope
   (case unit inside the user's unit) → comments → e-signature, then writes the action + audit, publishes
   `WorkflowAdvanced` and notifies the roles that act next — in one transaction. The hourly scheduler escalates overdue
-  cases up the unit chain (or sends daily reminders). `history()` merges legacy `approval_actions`.
+  cases up the unit chain (or sends daily reminders). `history()` merges legacy `approval_actions`. Next actors are
+  notified on the definition's `notifyChannels` (default IN_APP + EMAIL; EMAIL/SMS/PUSH go through the outbox).
 - **outbox** — `outbox_messages` (PENDING → SENT/ACKED, FAILED with exponential back-off, DEAD after maxAttempts).
   The relay polls every `OUTBOX_POLL_MS` (5000; 0 = off; off in tests, which call `drain()`): with `REDIS_URL` it hands
   messages to a BullMQ worker (queue `outbox`), without it delivers inline. EMAIL/SMS/PUSH use logging stub adapters
   until provider credentials exist. Dead messages and overdue acknowledgements publish `OutboxProblem` → one alert
   per channel per day.
+
+## Area scope of alerts and reports
+
+- `alerts.unit_id`: set when an alert is raised (area-sourced alerts use their kebele/woreda/zone/region; quota
+  delivery alerts the allocation's unit; manual alerts the reporter's unit). Field officers see alerts inside or above
+  their unit; alerts without a unit (vessels, quality, trucks, messaging) are operational and go to national roles.
+- `report_regions.admin_unit_id` maps the daily-report regions onto `admin_units` (`report-region-units.ts`);
+  unmapped report regions (South West Ethiopia, until Phase 1 loads it) are national-only.
+- National figures, integrations and the dashboard keep national totals for every reader and drop other regions' rows.
 
 ## Security notes
 

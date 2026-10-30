@@ -201,6 +201,7 @@ export class LogisticsViewService {
         id: w.id,
         code: w.code,
         kind: w.kind,
+        regionId: w.regionId,
         warehouseStatus: w.status,
         reservedMT: reserved,
         availableMT: round(onHand - reserved, 1),

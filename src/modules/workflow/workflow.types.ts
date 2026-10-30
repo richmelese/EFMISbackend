@@ -42,7 +42,15 @@ export interface WorkflowDefinition {
   deadlineHours?: Readonly<Record<string, number>>;
   /** After the deadline: escalate one unit up every `everyHours`, at most `maxLevel` times (otherwise daily reminders) */
   escalation?: { everyHours: number; maxLevel: number };
+  /**
+   * Channels used to tell the next actors (default IN_APP + EMAIL). EMAIL / SMS / PUSH are delivered through the outbox
+   * (NotificationsService.notify enqueues them in the acting transaction).
+   */
+  notifyChannels?: readonly WorkflowNotifyChannel[];
 }
+
+export type WorkflowNotifyChannel = 'IN_APP' | 'EMAIL' | 'SMS' | 'PUSH';
+export const DEFAULT_NOTIFY_CHANNELS: readonly WorkflowNotifyChannel[] = ['IN_APP', 'EMAIL'];
 
 /** Published (in the acting transaction) after every transition. Domain modules update their own records from it. */
 export class WorkflowAdvanced {

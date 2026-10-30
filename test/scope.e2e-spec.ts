@@ -9,6 +9,8 @@ import { SEED_USERS, startTestApi, TestApi } from './helpers/e2e';
 import { registerTestWorkflows } from './helpers/workflow-fixtures';
 import { WorkflowRegistry } from '../src/modules/workflow/workflow.registry';
 import { WorkflowService } from '../src/modules/workflow/workflow.service';
+import { DataSource } from 'typeorm';
+import { AlertsService } from '../src/modules/alerts/alerts.service';
 
 const PIN = DEMO_PIN;
 /** Adama woreda farmer (Wonji kebele KEB-01) and Lume woreda farmer (Koka kebele KEB-04). */
@@ -16,7 +18,7 @@ const ADAMA_FARMER = 'FARM-2026-04821';
 const LUME_FARMER = 'FARM-2026-04823';
 
 /** Route prefixes whose data is segmented by administrative unit. */
-const SCOPED = /^\/api\/(farmers|integrations\/(fayda|nrlais|nsis)|kebele|reviews|aggregation|regions|quota|meta|bootstrap|dashboard|copilot|v1\/admin-units|v1\/workflow)(\/|$)/;
+const SCOPED = /^\/api\/(farmers|integrations\/(fayda|nrlais|nsis)|kebele|reviews|aggregation|regions|quota|meta|bootstrap|dashboard|copilot|v1\/admin-units|v1\/workflow|(v1\/)?alerts|national|integrations\/(procurement|quality|logistics|financials)|reports)(\/|$)/;
 
 /** Routes of those modules that are intentionally not unit-scoped, with the reason. */
 const EXEMPT: Record<string, string> = {
@@ -42,6 +44,45 @@ const EXEMPT: Record<string, string> = {
   'GET /api/quota/procurement-requests/{id}': 'national procurement (MoA / EABC)',
   'POST /api/quota/procurement-requests/{id}/status': 'po:acknowledge, EABC',
   'GET /api/meta': 'system metadata, no unit data',
+  // alerts: lifecycle actions are alerts:manage (national roles), who see every alert
+  ...Object.fromEntries(['assign', 'resolve', 'close', 'reopen', 'snooze', 'toggle'].flatMap(a => [
+    [`POST /api/alerts/{id}/${a}`, 'alerts:manage, national roles only'], [`POST /api/v1/alerts/{id}/${a}`, 'alerts:manage, national roles only']
+  ])),
+  // national: national totals and the FTWG committee have no per-area rows; edits are national roles
+  'GET /api/national/net-import': 'national total, no per-area rows',
+  'GET /api/national/carry-over': 'national stock by facility tier, no per-area rows',
+  'PATCH /api/national/carry-over/{type}': 'national:edit, national roles only',
+  'GET /api/national/ftwg/sessions': 'national technical committee record, no per-area rows',
+  'GET /api/national/ftwg/sessions/{id}': 'national technical committee record, no per-area rows',
+  'GET /api/national/ftwg/sessions/{id}/minutes': 'national technical committee record, no per-area rows',
+  'POST /api/national/ftwg/sessions': 'ftwg:manage, national roles only',
+  'POST /api/national/ftwg/sessions/{id}/vote': 'ftwg:vote, national roles only',
+  'POST /api/national/ftwg/sessions/{id}/close': 'ftwg:manage, national roles only',
+  'POST /api/national/ftwg/sessions/{id}/action-items': 'ftwg:manage, national roles only',
+  'PATCH /api/national/ftwg/action-items/{itemId}': 'ftwg:participate, national roles only',
+  'POST /api/national/documents': 'national:edit, national roles only',
+  'POST /api/national/documents/{id}/sign': 'document:sign, national roles only',
+  'POST /api/national/documents/{id}/reject': 'document:sign, national roles only',
+  'GET /api/national/documents/{id}/verify': 'signature verification result, no area data',
+  // integrations: national procurement / quality feeds have no area; writes are partner feeds
+  'GET /api/integrations/procurement': 'national tenders and vessels, no area',
+  'GET /api/integrations/quality': 'national quality inspections, no area',
+  'GET /api/integrations/quality/coc/{code}/verify': 'public certificate verification, no area',
+  'PUT /api/integrations/procurement/tenders/{tenderNo}': 'integrations:write, national partner feed',
+  'PUT /api/integrations/procurement/vessels/{imo}': 'integrations:write, national partner feed',
+  'POST /api/integrations/quality/inspections': 'integrations:write, national partner feed',
+  'PUT /api/integrations/logistics/trucks/{truckId}': 'integrations:write, national partner feed',
+  'PUT /api/integrations/logistics/warehouses/{name}': 'integrations:write, national partner feed',
+  'PUT /api/integrations/financials/ecx-prices/{commodity}': 'integrations:write, national partner feed',
+  // reports: date labels carry no data; edits are reports:edit (national roles)
+  'GET /api/reports/daily-summary/dates': 'report date labels only',
+  'POST /api/reports/daily-summary/dates': 'reports:edit, national roles only',
+  'PUT /api/reports/daily-summary/{date}/{regionId}/{fertilizerType}': 'reports:edit, national roles only',
+  'POST /api/reports/regional/lots': 'reports:edit, national roles only',
+  'PATCH /api/reports/regional/lots/{lotId}/unions/{unionId}/loads': 'reports:edit, national roles only',
+  'POST /api/reports/regional/lots/{lotId}/dispatches': 'reports:edit, national roles only',
+  'POST /api/reports/regional/lots/{lotId}/dates': 'reports:edit, national roles only',
+  'POST /api/reports/regional/lots/{lotId}/unions': 'reports:edit, national roles only',
   'GET /api/dashboard/overview': 'national headline figures; rebuilt on scoped totals in Phase 10',
   'POST /api/copilot/ask': 'answers from national figures; scoped in Phase 10'
 };
@@ -86,6 +127,16 @@ describe('Unified scope: wrong unit → 403 (e2e)', () => {
     const letters = await api('post', '/quota/letters', 'MOA').send({ regionIds: ['REG-OROMIA', 'REG-AMHARA'], pin: PIN });
     expect(letters.status).toBe(201);
     rec.oromiaLetter = letters.body.find((l: any) => l.regionId === 'REG-OROMIA').id;
+
+    const ds = t.app.get(DataSource);
+    // an alert sourced from a kebele gets that kebele as its unit
+    const koka = await t.app.get(AlertsService).raise({
+      severity: 'MEDIUM_YELLOW', title: 'Kebele approvals overdue in Koka Negewo', category: 'Pending Approvals', sourceType: 'KEBELE', sourceId: 'KEB-04'
+    });
+    expect(koka.unitId).toBe('KEB-04');
+    rec.kokaAlert = koka.id;
+    rec.nationalAlert = (await ds.query(`SELECT id FROM alerts WHERE unit_id IS NULL LIMIT 1`))[0].id;
+    rec.oromiaLot = (await ds.query(`SELECT lot_id FROM vessel_lots WHERE region_id = 'oromia' LIMIT 1`))[0].lot_id;
 
     registerTestWorkflows(t.app.get(WorkflowRegistry));
     rec.case = (await t.app.get(WorkflowService).open('TEST_PACKAGE_REVIEW', { id: 'WOR-OR-ADAMA' }, 'WOR-OR-ADAMA', 'MEHER-2026')).id;
@@ -368,6 +419,110 @@ describe('Unified scope: wrong unit → 403 (e2e)', () => {
     },
     'GET /api/v1/admin-units/{id}/children': async () => {
       outOfScope(await api('get', '/v1/admin-units/WOR-OR-ADAMA/children', 'LUME'));
+    },
+
+    // ---------------------------------------------------------------- alerts (field roles see their area; unit-less = national)
+    ...Object.fromEntries(['/api', '/api/v1'].flatMap(base => {
+      const p = base.replace('/api', '');
+      return [
+        [`GET ${base}/alerts`, async () => {
+          const ids = (who: string) => api('get', `${p}/alerts`, who).then(r => r.body.map((a: any) => a.id));
+          expect(await ids('LUME')).toContain(rec.kokaAlert);
+          expect(await ids('ZONE')).toContain(rec.kokaAlert);
+          const adama = await ids('ADAMA');
+          expect(adama).not.toContain(rec.kokaAlert);
+          expect(adama).not.toContain(rec.nationalAlert);
+          expect(await ids('MOA')).toEqual(expect.arrayContaining([rec.kokaAlert, rec.nationalAlert]));
+        }],
+        [`GET ${base}/alerts/summary`, async () => {
+          const open = (await api('get', `${p}/alerts`, 'ADAMA')).body.filter((a: any) => !a.resolved).length;
+          expect((await api('get', `${p}/alerts/summary`, 'ADAMA')).body.open).toBe(open);
+          expect((await api('get', `${p}/alerts/summary`, 'MOA')).body.open).toBeGreaterThan(open);
+        }],
+        [`GET ${base}/alerts/{id}`, async () => {
+          outOfScope(await api('get', `${p}/alerts/${rec.kokaAlert}`, 'ADAMA'));
+          outOfScope(await api('get', `${p}/alerts/${rec.nationalAlert}`, 'LUME'));
+          expect((await api('get', `${p}/alerts/${rec.kokaAlert}`, 'LUME')).status).toBe(200);
+        }],
+        [`POST ${base}/alerts/{id}/acknowledge`, async () => {
+          outOfScope(await api('post', `${p}/alerts/${rec.kokaAlert}/acknowledge`, 'ADAMA'));
+        }],
+        [`POST ${base}/alerts`, async () => {
+          const body = { severity: 'LOW_BLUE', title: 'Scope test alert', category: 'Demand Anomaly' };
+          outOfScope(await api('post', `${p}/alerts`, 'AMHARA').send({ ...body, unitId: 'REG-OROMIA' }));
+          const own = await api('post', `${p}/alerts`, 'AMHARA').send(body);
+          expect(own.status).toBe(201);
+          expect(own.body.unitId).toBe('REG-AMHARA');
+        }]
+      ];
+    })),
+
+    // ---------------------------------------------------------------- national (regional officers: own region's rows)
+    'GET /api/national/summary': async () => {
+      const s = (await api('get', '/national/summary', 'AMHARA')).body;
+      expect(s.national.regions.map((r: any) => r.id)).toEqual(['REG-AMHARA']);
+      expect(s.national.grossNationalDemandMT).toBeGreaterThan(0); // national total stays
+      expect(s.demandDocument.content.regionalBreakdown.map((r: any) => r.id)).toEqual(['REG-AMHARA']);
+      expect((await api('get', '/national/summary', 'MOA')).body.national.regions).toHaveLength(7);
+    },
+    'GET /api/national/gross-demand': async () => {
+      expect((await api('get', '/national/gross-demand', 'AMHARA')).body.regions.map((r: any) => r.id)).toEqual(['REG-AMHARA']);
+    },
+    'GET /api/national/export': async () => {
+      expect((await api('get', '/national/export', 'AMHARA')).body.regions.map((r: any) => r.id)).toEqual(['REG-AMHARA']);
+      expect((await api('get', '/national/export?format=csv', 'AMHARA')).text).not.toMatch(/Oromia/);
+    },
+    'GET /api/national/documents': async () => {
+      const docs = (await api('get', '/national/documents', 'AMHARA')).body;
+      expect(docs.every((d: any) => (d.content.regionalBreakdown ?? []).every((r: any) => r.id === 'REG-AMHARA'))).toBe(true);
+    },
+    'GET /api/national/documents/latest': async () => {
+      expect((await api('get', '/national/documents/latest', 'AMHARA')).body.content.regionalBreakdown.map((r: any) => r.id)).toEqual(['REG-AMHARA']);
+    },
+    'GET /api/national/documents/{id}': async () => {
+      const id = (await api('get', '/national/documents/latest', 'MOA')).body.id;
+      expect((await api('get', `/national/documents/${id}`, 'AMHARA')).body.content.regionalBreakdown.map((r: any) => r.id)).toEqual(['REG-AMHARA']);
+    },
+
+    // ---------------------------------------------------------------- integrations
+    'GET /api/integrations/logistics': async () => {
+      const wh = (await api('get', '/integrations/logistics', 'AMHARA')).body.warehouseUtilization;
+      expect(wh.every((w: any) => w.regionId === null || w.regionId === 'REG-AMHARA')).toBe(true);
+      expect((await api('get', '/integrations/logistics', 'MOA')).body.warehouseUtilization.some((w: any) => w.regionId === 'REG-OROMIA')).toBe(true);
+    },
+    'GET /api/integrations/financials': async () => {
+      expect((await api('get', '/integrations/financials', 'AMHARA')).body.creditArrearsByRegion.map((r: any) => r.regionId)).toEqual(['REG-AMHARA']);
+      expect((await api('get', '/integrations/financials', 'MOA')).body.creditArrearsByRegion).toHaveLength(7);
+    },
+
+    // ---------------------------------------------------------------- daily reports (report regions mapped to units)
+    'GET /api/reports/daily-summary/all': async () => {
+      const recs = Object.values((await api('get', '/reports/daily-summary/all', 'AMHARA')).body.recordsByDate).flat() as any[];
+      expect(recs.length).toBeGreaterThan(0);
+      expect(recs.every(r => r.regionId === 'amhara')).toBe(true);
+    },
+    'GET /api/reports/daily-summary': async () => {
+      expect((await api('get', '/reports/daily-summary', 'AMHARA')).body.records.every((r: any) => r.regionId === 'amhara')).toBe(true);
+      outOfScope(await api('get', '/reports/daily-summary?regionId=oromia', 'AMHARA'));
+    },
+    'GET /api/reports/daily-summary/export': async () => {
+      const csv = (await api('get', '/reports/daily-summary/export', 'AMHARA')).text;
+      expect(csv).toMatch(/Amhara/);
+      expect(csv).not.toMatch(/Oromia/);
+    },
+    'GET /api/reports/regional/regions': async () => {
+      expect((await api('get', '/reports/regional/regions', 'AMHARA')).body.map((r: any) => r.id)).toEqual(['amhara']);
+    },
+    'GET /api/reports/regional/lots': async () => {
+      expect(Object.keys((await api('get', '/reports/regional/lots', 'AMHARA')).body)).toEqual(['amhara']);
+      outOfScope(await api('get', '/reports/regional/lots?regionId=oromia', 'AMHARA'));
+    },
+    'GET /api/reports/regional/lots/{lotId}/dispatches': async () => {
+      outOfScope(await api('get', `/reports/regional/lots/${rec.oromiaLot}/dispatches`, 'AMHARA'));
+      expect((await api('get', `/reports/regional/lots/${rec.oromiaLot}/dispatches`, 'OROMIA')).status).toBe(200);
+    },
+    'GET /api/reports/regional/export': async () => {
+      outOfScope(await api('get', '/reports/regional/export?regionId=oromia', 'AMHARA'));
     },
 
     // ---------------------------------------------------------------- workflow
