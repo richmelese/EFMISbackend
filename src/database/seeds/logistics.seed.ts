@@ -1,6 +1,7 @@
 // Logistics & Driver Management seed: turns the frontend's static fleet/warehouse data (EFMIS_DATA.logistics) into real
 // records — warehouses + inventory ledger, products, vehicle types, trucks + GPS devices, verified drivers, routes,
 // geofences, and the four active trips/shipments that the GPS fleet table shows.
+import { createHash } from 'crypto';
 import { EntityManager } from 'typeorm';
 import { EFMIS_DATA } from './data/efmis-data';
 import { DEFAULT_LOGISTICS_THRESHOLDS } from '../../modules/logistics/logistics.constants';
@@ -11,6 +12,14 @@ import { InventoryBalance, InventoryTransaction, Product, Warehouse } from '../.
 import { Geofence, Route, RouteMilestone, TripMilestone } from '../../modules/logistics/routing/entities/routing.entities';
 import { Shipment, Trip, TripChecklist, TripShipment } from '../../modules/logistics/shipments/entities/shipment.entities';
 import { haversineKm, polylineLengthKm, LatLng } from '../../common/utils/geo';
+import { StorageService } from '../../modules/storage/storage.service';
+import { objectKey } from '../../modules/storage/storage.types';
+
+/** A minimal valid one-page PDF, so seeded driver documents have a real object to download. */
+function placeholderPdf(title: string): Buffer {
+  const text = title.replace(/[()\\]/g, '');
+  return Buffer.from(`%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 120]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n4 0 obj<</Length ${text.length + 40}>>stream\nBT /F1 12 Tf 20 60 Td (${text}) Tj ET\nendstream endobj\n5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n`, 'latin1');
+}
 
 /** Coordinates of the seeded warehouses (approximate site locations). */
 const WAREHOUSES: Array<{ code: string; name: string; kind: string; lat: number; lng: number; capacity?: number; stock?: number; regionId: string | null; address: string }> = [
@@ -38,7 +47,7 @@ const CORRIDOR = {
 const now = () => new Date();
 const hoursFromNow = (h: number) => new Date(Date.now() + h * 36e5);
 
-export async function seedLogistics(m: EntityManager): Promise<void> {
+export async function seedLogistics(m: EntityManager, storage: StorageService): Promise<void> {
   await m.getRepository(Setting).save({ key: 'logisticsThresholds', value: DEFAULT_LOGISTICS_THRESHOLDS, updatedBy: 'seed' });
 
   // ---- Products ----
@@ -124,9 +133,13 @@ export async function seedLogistics(m: EntityManager): Promise<void> {
       verificationStatus: 'VERIFIED', employmentStatus: 'ACTIVE', availabilityStatus: 'AVAILABLE',
       emergencyContactName: `${firstName} family`, emergencyContactPhone: '0911000999', certifications: [{ name: 'Dangerous & bulk cargo handling', expiresAt: licenceExpiry(days + 200) }]
     });
+    // a real (placeholder) licence PDF in the driver-documents bucket; no write-once retention for demo data
+    const pdf = placeholderPdf(`Demo driving licence ${licenceNumber} - ${firstName} ${lastName}`);
+    const hash = createHash('sha256').update(pdf).digest('hex');
+    const stored = await storage.put('DRIVER_DOCUMENTS', objectKey(d.id, 'licence-demo.pdf'), pdf, { mimeType: 'application/pdf', sha256: hash });
     await m.getRepository(DriverDocument).insert({
-      driverId: d.id, documentType: 'LICENCE', secureStorageKey: `seed/driver-documents/${d.id}.pdf`, fileName: `${employeeNumber}-licence.pdf`, mimeType: 'application/pdf',
-      sizeBytes: 0, sha256: `seed-${employeeNumber}`, issuedAt: '2022-01-15', expiresAt: d.licenceExpiryDate, verificationStatus: 'VERIFIED', verifiedBy: 'seed', verifiedAt: now()
+      driverId: d.id, documentType: 'LICENCE', secureStorageKey: stored.key, fileName: `${employeeNumber}-licence.pdf`, mimeType: 'application/pdf',
+      sizeBytes: pdf.length, sha256: hash, issuedAt: '2022-01-15', expiresAt: d.licenceExpiryDate, verificationStatus: 'VERIFIED', verifiedBy: 'seed', verifiedAt: now()
     });
     drivers.push(d);
   }

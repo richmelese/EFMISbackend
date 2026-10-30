@@ -13,6 +13,7 @@ import { SettingsService } from '../settings/settings.service';
 import { AuthService } from '../auth/auth.service';
 import { WorkflowService } from '../workflow/workflow.service';
 import { OutboxService } from '../outbox/outbox.service';
+import { StorageService } from '../storage/storage.service';
 
 export interface SchedulerSummary {
   kebeleEscalations: number;
@@ -25,6 +26,7 @@ export interface SchedulerSummary {
   workflowReminders: number;
   workflowEscalations: number;
   outboxAckOverdue: number;
+  storageRetentionApplied: number;
 }
 
 const age = (d: Date | string) => daysSince(typeof d === 'string' ? parseStamp(d) : d);
@@ -56,7 +58,8 @@ export class SchedulerService {
     private readonly settings: SettingsService,
     private readonly auth: AuthService,
     private readonly workflow: WorkflowService,
-    private readonly outbox: OutboxService
+    private readonly outbox: OutboxService,
+    private readonly storage: StorageService
   ) {}
 
   @Cron(CronExpression.EVERY_HOUR, { name: 'efmis-workflow-scheduler' })
@@ -80,7 +83,7 @@ export class SchedulerService {
   }
 
   private async execute(): Promise<SchedulerSummary> {
-    const summary: SchedulerSummary = { kebeleEscalations: 0, reminders: 0, signatureEscalations: 0, letterReminders: 0, poEscalations: 0, slaEscalations: 0, unsnoozed: 0, workflowReminders: 0, workflowEscalations: 0, outboxAckOverdue: 0 };
+    const summary: SchedulerSummary = { kebeleEscalations: 0, reminders: 0, signatureEscalations: 0, letterReminders: 0, poEscalations: 0, slaEscalations: 0, unsnoozed: 0, workflowReminders: 0, workflowEscalations: 0, outboxAckOverdue: 0, storageRetentionApplied: 0 };
     const escalationDays = Number(await this.settings.get('kebeleEscalationDays', this.config.get<number>('kebeleEscalationDays') ?? 7)) || 7;
     const today = nowStamp().slice(0, 10);
     const lastRun = await this.settings.get<any>('schedulerLastRun', null);
@@ -181,6 +184,9 @@ export class SchedulerService {
 
     // ---- Outgoing messages whose receiver has not acknowledged in time
     summary.outboxAckOverdue = await this.outbox.checkAckOverdue(now);
+
+    // ---- Write-once retention for uploads whose immediate attempt failed
+    summary.storageRetentionApplied = (await this.storage.applyPendingRetention()).applied;
 
     // ---- Housekeeping: expired revoked tokens and OTP codes
     await this.auth.purgeExpired();

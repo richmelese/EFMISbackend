@@ -29,4 +29,6 @@ The Phase 0 specs (`app`, `platform`, `rbac`, `architecture`, `logistics`, `cust
 - No file above 300 lines of code (`max-lines`). Files listed in `eslint-legacy-large-files.js` predate the rule and
   are split in their phase; never add to that list.
 - Tests use the seeded demo data (`SeedService`); a test that needs more creates it through the API or a service.
-- Local e2e needs the Docker Postgres (`npm run db:up`); tests reset the `efmis_test` database, never `efmis`.
+- Local e2e needs the Docker Postgres and MinIO (`npm run db:up`); tests reset the `efmis_test` database and empty the
+  `efmis-test-*` buckets, never `efmis` or the dev buckets.
+- File storage tests: `test/storage.e2e-spec.ts` (buckets, round trip, duplicate, rollback, retention, import).

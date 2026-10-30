@@ -45,7 +45,7 @@ export class DriverDocument {
   @Column({ type: 'uuid' }) driverId: string;
   /** LICENCE | NATIONAL_ID | CERTIFICATE | MEDICAL | OTHER */
   @Column({ type: 'varchar', length: 20 }) documentType: string;
-  /** Path/key in private storage — never exposed directly */
+  /** Object key in the MinIO bucket efmis-driver-documents (<driverId>/<file>) — never exposed directly */
   @Column({ type: 'text' }) secureStorageKey: string;
   @Column({ type: 'varchar', length: 200 }) fileName: string;
   @Column({ type: 'varchar', length: 60 }) mimeType: string;

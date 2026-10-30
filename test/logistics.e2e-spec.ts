@@ -13,6 +13,7 @@ import { SeedService, DEMO_PASSWORD, DEMO_PIN } from '../src/database/seeds/seed
 import { RealtimeService } from '../src/modules/logistics/realtime/realtime.service';
 import { TrackingService } from '../src/modules/logistics/tracking/tracking.service';
 import { JobFailure } from '../src/modules/logistics/jobs/entities/job-failure.entity';
+import { StorageService } from '../src/modules/storage/storage.service';
 
 const SECRET = process.env.TRACCAR_WEBHOOK_SECRET!;
 const PDF = Buffer.from('%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n');
@@ -38,6 +39,7 @@ describe('Logistics & Driver Management (e2e)', () => {
     http = app.getHttpServer();
     baseUrl = `http://127.0.0.1:${http.address().port}`;
     const seeder = app.get(SeedService);
+    await app.get(StorageService).emptyTestBuckets();
     await seeder.reset();
     await seeder.seed();
     t.MANAGER = await login('logistics.manager@eslse.gov.et');
@@ -253,6 +255,18 @@ describe('Logistics & Driver Management (e2e)', () => {
       .field('notes', '4 bags torn').attach('proof', PDF, { filename: 'pod.pdf', contentType: 'application/pdf' });
     const first = await confirm().expect(201);
     expect(JSON.stringify(first.body)).toMatch(/-0\.2\b|-0\.19999/);
+    // the proof lives in the MinIO bucket for delivery proofs, under <shipmentId>/…, and downloads byte for byte
+    const deliveryId = first.body.id ?? first.body.delivery?.id;
+    const [row] = await app.get(DataSource).query(`SELECT proof_of_delivery_storage_key AS key FROM deliveries WHERE id = $1`, [deliveryId]);
+    expect(row.key.startsWith(`${ids.SHIPMENT}/`)).toBe(true);
+    expect(await app.get(StorageService).exists('DELIVERY_PROOFS', row.key)).toBe(true);
+    const pod = await api('get', `/v1/deliveries/${deliveryId}/proof`, t.DISPATCHER).buffer(true).parse((res, cb) => {
+      const chunks: Buffer[] = [];
+      res.on('data', (c: Buffer) => chunks.push(c));
+      res.on('end', () => cb(null, Buffer.concat(chunks)));
+    });
+    expect(pod.status).toBe(200);
+    expect(Buffer.compare(pod.body, PDF)).toBe(0);
     const again = await confirm();
     expect(again.status).toBe(200);
     expect(again.body.id ?? again.body.delivery?.id).toBe(first.body.id ?? first.body.delivery?.id);

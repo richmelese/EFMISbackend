@@ -8,6 +8,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/main';
 import { SeedService, DEMO_PASSWORD, DEMO_PIN } from '../src/database/seeds/seed.service';
+import { StorageService } from '../src/modules/storage/storage.service';
 
 const PIN = DEMO_PIN;
 const ROLES = ['DA', 'KEBELE', 'WOREDA', 'ZONE', 'REGION', 'MOA', 'FTWG', 'ATI', 'EABC', 'PMO', 'ECAE', 'AUDITOR'];
@@ -29,6 +30,7 @@ describe('EFMIS API (e2e)', () => {
     await app.init();
     http = app.getHttpServer();
     const seeder = app.get(SeedService);
+    await app.get(StorageService).emptyTestBuckets();
     await seeder.reset();
     await seeder.seed();
     for (const role of ROLES) {

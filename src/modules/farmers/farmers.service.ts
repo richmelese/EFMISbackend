@@ -1,10 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { plainToInstance } from 'class-transformer';
 import { validate, ValidationError } from 'class-validator';
-import * as fs from 'fs';
-import * as path from 'path';
 import { DataSource, EntityManager, In, Not, Repository } from 'typeorm';
 import { Farmer } from './entities/farmer.entity';
 import { FarmerDemand } from './entities/farmer-demand.entity';
@@ -13,6 +10,8 @@ import { DeleteFarmerDto, ListFarmersQueryDto, RegisterFarmerDto, SyncFarmersDto
 import { RULES } from '../../common/constants/rules';
 import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { Errors } from '../../common/utils/errors';
+import { StorageService } from '../storage/storage.service';
+import { objectKey, retentionUntil } from '../storage/storage.types';
 import { nowStamp, parseStamp, round, sha256, shortId, stamp, today } from '../../common/utils/helpers';
 import { applySearch } from '../../common/utils/query-filters';
 import { assertInScope, scopeCondition, UnitRef } from '../../common/utils/scope';
@@ -69,7 +68,7 @@ export class FarmersService {
     private readonly workflow: WorkflowService,
     private readonly external: ExternalService,
     private readonly hierarchy: HierarchyService,
-    private readonly config: ConfigService
+    private readonly storage: StorageService
   ) {}
 
   // ------------------------------------------------------------------ rules
@@ -539,25 +538,25 @@ export class FarmersService {
     if (dup) throw Errors.conflict('Duplicate document upload detected (identical file already stored)', { existingDocumentId: dup.id, farmerId: dup.farmerId });
 
     const docId = shortId('DOC');
-    const dir = path.join(this.config.get<string>('uploadDir')!, f.id);
-    await fs.promises.mkdir(dir, { recursive: true });
-    const storagePath = path.join(dir, docId + MIME_EXT[file.mimetype]);
-    await fs.promises.writeFile(storagePath, file.buffer);
+    // object first, then the row; if the row cannot be saved the object is removed again (rollback)
+    const stored = await this.storage.put('FARMER_DOCUMENTS', objectKey(f.id, docId + MIME_EXT[file.mimetype]), file.buffer, { mimeType: file.mimetype, sha256: hash });
     try {
       await this.ds.transaction(async m => {
         await m.getRepository(FarmerDocument).insert({
           id: docId, farmerId: f.id, docType, fileName: file.originalname.slice(0, 240), mimeType: file.mimetype, sizeBytes: file.size,
-          sha256: hash, storagePath, consentGiven: true, uploadedBy: user.id
+          sha256: hash, storageKey: stored.key, consentGiven: true, uploadedBy: user.id
         });
+        await this.storage.scheduleRetention(m, stored, retentionUntil('FARMER_DOCUMENTS', new Date()));
         if (docType === 'PHOTO') {
           await m.getRepository(Farmer).update({ id: f.id }, { photoUrl: `/api/farmers/${f.id}/documents/${docId}/file` });
         }
         await this.audit.record(user, 'FARMER_DOCUMENT_UPLOADED', f.id, { documentId: docId, docType, sha256: hash, sizeBytes: file.size }, ctx, m);
       });
     } catch (e) {
-      await fs.promises.unlink(storagePath).catch(() => undefined);
+      await this.storage.remove(stored);
       throw e;
     }
+    this.storage.applyPendingRetentionSoon();
     return { id: docId, farmerId: f.id, docType, fileName: file.originalname, mimeType: file.mimetype, sizeBytes: file.size, sha256: hash };
   }
 
@@ -575,10 +574,9 @@ export class FarmersService {
     const f = await this.getScoped(user, id);
     const d = await this.docRepo.findOne({ where: { id: docId, farmerId: f.id } });
     if (!d) throw Errors.notFound('Document');
-    const file = path.resolve(d.storagePath);
-    if (!fs.existsSync(file)) throw Errors.notFound('Document file');
+    const obj = await this.storage.get('FARMER_DOCUMENTS', d.storageKey);
     await this.audit.record(user, 'SENSITIVE_DOCUMENT_ACCESSED', f.id, { documentId: d.id, docType: d.docType }, ctx);
-    return { path: file, mimeType: d.mimeType, fileName: d.fileName };
+    return { stream: obj.stream, sizeBytes: obj.sizeBytes, mimeType: d.mimeType, fileName: d.fileName };
   }
 
   /** Farmers by id list (helper for other modules). */

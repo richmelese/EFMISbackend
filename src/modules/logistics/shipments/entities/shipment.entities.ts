@@ -153,7 +153,7 @@ export class Delivery {
   @Column(QTY({ default: 0 })) discrepancyQuantity: number;
   @Column({ type: 'varchar', length: 16, default: 'GOOD' }) condition: string;
   @Column({ type: 'text', nullable: true }) notes: string | null;
-  /** Private storage key of the proof-of-delivery file (signed note / photo) */
+  /** Object key in the MinIO bucket efmis-delivery-proofs (<shipmentId>/<file>) of the signed note / photo */
   @Column({ type: 'text', nullable: true }) proofOfDeliveryStorageKey: string | null;
   @Column({ type: 'varchar', length: 64, nullable: true }) proofSha256: string | null;
   @Column({ type: 'varchar', length: 60, nullable: true }) proofMimeType: string | null;

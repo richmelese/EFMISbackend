@@ -2,7 +2,6 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Res, Streamab
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
-import * as fs from 'fs';
 import { CurrentUser, ReqCtx, RequirePermissions } from '../../../common/decorators';
 import { AuthUser, RequestContext } from '../../../common/types/auth-user';
 import { DocumentVerificationDto, DOCUMENT_TYPES, UploadDriverDocumentDto } from './dto/driver.dto';
@@ -60,7 +59,7 @@ export class DriverDocumentsController {
     const f = await this.docs.file(user, id, ctx);
     res.setHeader('Cache-Control', 'no-store');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    return new StreamableFile(fs.createReadStream(f.path), {
+    return new StreamableFile(f.stream, {
       type: f.mimeType,
       length: f.sizeBytes,
       disposition: `attachment; filename="${encodeURIComponent(f.fileName)}"`

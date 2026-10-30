@@ -2,13 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import * as crypto from 'crypto';
-import * as fs from 'fs';
 import * as path from 'path';
 import { DataSource, Repository } from 'typeorm';
 import { RULES } from '../../../common/constants/rules';
 import { AuthUser, RequestContext } from '../../../common/types/auth-user';
 import { Errors } from '../../../common/utils/errors';
 import { AuditService } from '../../audit/audit.service';
+import { StorageService } from '../../storage/storage.service';
+import { objectKey, retentionUntil } from '../../storage/storage.types';
 import { SettingsService } from '../../settings/settings.service';
 import { logisticsThresholds } from '../logistics.constants';
 import { DocumentVerificationDto, UploadDriverDocumentDto } from './dto/driver.dto';
@@ -25,7 +26,6 @@ export interface UploadedDriverFile {
 }
 
 const MIME_EXT: Record<string, string> = { 'image/jpeg': '.jpg', 'image/png': '.png', 'application/pdf': '.pdf' };
-const STORAGE_AREA = 'driver-documents';
 
 /** Magic-number check so a renamed executable cannot be stored as "image/png". */
 function contentMatchesMime(buf: Buffer, mime: string): boolean {
@@ -44,14 +44,9 @@ export class DriverDocumentsService {
     private readonly config: ConfigService,
     private readonly settings: SettingsService,
     private readonly audit: AuditService,
-    private readonly drivers: DriversService
+    private readonly drivers: DriversService,
+    private readonly storage: StorageService
   ) {}
-
-  private storageRoot(): string {
-    const dir = this.config.get<string>('logistics.proofStorageDir');
-    if (!dir) throw Errors.unprocessable('Private document storage is not configured');
-    return path.resolve(dir);
-  }
 
   private async warningDays() {
     return (await logisticsThresholds(this.settings)).documentExpiryWarningDays;
@@ -78,17 +73,15 @@ export class DriverDocumentsService {
 
     const id = crypto.randomUUID();
     const fileName = `${id}${MIME_EXT[file.mimetype]}`;
-    const dir = path.join(this.storageRoot(), STORAGE_AREA);
-    const abs = path.join(dir, fileName);
-    await fs.promises.mkdir(dir, { recursive: true });
-    await fs.promises.writeFile(abs, file.buffer, { mode: 0o600 });
+    // object first (bucket efmis-driver-documents), then the row; removed again if the row cannot be saved
+    const stored = await this.storage.put('DRIVER_DOCUMENTS', objectKey(driver.id, fileName), file.buffer, { mimeType: file.mimetype, sha256: hash });
 
     const originalName = path.basename(String(file.originalname || 'document')).replace(/[\u0000-\u001f"\\/]/g, '_').slice(0, 200) || 'document';
     try {
       const doc = await this.ds.transaction(async m => {
         const repo = m.getRepository(DriverDocument);
         const saved = await repo.save(repo.create({
-          id, driverId: driver.id, documentType: dto.documentType, secureStorageKey: `${STORAGE_AREA}/${fileName}`, fileName: originalName,
+          id, driverId: driver.id, documentType: dto.documentType, secureStorageKey: stored.key, fileName: originalName,
           mimeType: file.mimetype, sizeBytes: file.size, sha256: hash, issuedAt: dto.issuedAt ?? null, expiresAt: dto.expiresAt ?? null,
           verificationStatus: 'PENDING', verifiedBy: null, verifiedAt: null, rejectionReason: null, uploadedBy: user.id
         }));
@@ -96,11 +89,13 @@ export class DriverDocumentsService {
           old: null,
           new: { documentId: saved.id, documentType: saved.documentType, mimeType: saved.mimeType, sizeBytes: saved.sizeBytes, sha256: hash, issuedAt: saved.issuedAt, expiresAt: saved.expiresAt }
         }, ctx, m);
+        await this.storage.scheduleRetention(m, stored, retentionUntil('DRIVER_DOCUMENTS', new Date(), dto.expiresAt));
         return saved;
       });
+      this.storage.applyPendingRetentionSoon();
       return docToFrontend(doc, await this.warningDays());
     } catch (e) {
-      await fs.promises.unlink(abs).catch(() => undefined);
+      await this.storage.remove(stored);
       const msg = uniqueViolation(e);
       if (msg) throw Errors.conflict(msg);
       throw e;
@@ -118,12 +113,9 @@ export class DriverDocumentsService {
   async file(user: AuthUser, documentId: string, ctx: RequestContext) {
     const doc = await this.documents.findOne({ where: { id: documentId } });
     if (!doc) throw Errors.notFound('Driver document');
-    const root = this.storageRoot();
-    const abs = path.resolve(root, doc.secureStorageKey);
-    if (!abs.startsWith(root + path.sep)) throw Errors.notFound('Document file');
-    if (!fs.existsSync(abs)) throw Errors.notFound('Document file');
+    const obj = await this.storage.get('DRIVER_DOCUMENTS', doc.secureStorageKey);
     await this.audit.record(user, 'DRIVER_DOCUMENT_ACCESSED', doc.driverId, { documentId: doc.id, documentType: doc.documentType }, ctx);
-    return { path: abs, mimeType: doc.mimeType, fileName: doc.fileName, sizeBytes: doc.sizeBytes };
+    return { stream: obj.stream, mimeType: doc.mimeType, fileName: doc.fileName, sizeBytes: obj.sizeBytes };
   }
 
   async setVerification(user: AuthUser, documentId: string, dto: DocumentVerificationDto, ctx: RequestContext) {

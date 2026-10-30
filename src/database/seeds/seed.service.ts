@@ -14,6 +14,7 @@ import { Setting } from '../../modules/settings/entities/setting.entity';
 import { Season } from '../../modules/seasons/entities/season.entity';
 import { backfillAdminUnits, backfillUserUnits } from '../../modules/admin-units/admin-unit-backfill';
 import { backfillAlertUnits } from '../../modules/alerts/alert-units';
+import { StorageService } from '../../modules/storage/storage.service';
 import { backfillReportRegionUnits } from '../../modules/reports/report-region-units';
 import { seasonFromName, seasonStatusRelativeTo } from '../../modules/seasons/season-calendar';
 import { RoleEntity } from '../../modules/users/entities/role.entity';
@@ -103,7 +104,8 @@ export class SeedService {
     private readonly signatures: SignaturesService,
     private readonly users: UsersService,
     private readonly config: ConfigService,
-    private readonly rbac: RbacService
+    private readonly rbac: RbacService,
+    private readonly storage: StorageService
   ) {}
 
   async isEmpty(): Promise<boolean> {
@@ -135,7 +137,7 @@ export class SeedService {
       await this.seedIntegrations(m);
       await this.seedReviews(m);
       await this.seedQuota(m);
-      await seedLogistics(m);
+      await seedLogistics(m, this.storage);
       await backfillOpeningLots(m);
       for (const [id, , , , , , whCode] of LOGISTICS_USERS) {
         if (whCode) await m.getRepository(User).update({ id }, { warehouseId: (await m.getRepository(Warehouse).findOneByOrFail({ code: whCode })).id });

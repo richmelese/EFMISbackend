@@ -2,7 +2,6 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, Query, Req
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
-import * as fs from 'fs';
 import { CurrentUser, ReqCtx, RequirePermissions } from '../../common/decorators';
 import { AuthUser, RequestContext } from '../../common/types/auth-user';
 import { paginate } from '../../common/utils/helpers';
@@ -118,6 +117,6 @@ export class FarmersController {
   @ApiOperation({ summary: 'Download a document (access is audited as SENSITIVE_DOCUMENT_ACCESSED)' })
   async documentFile(@Param('id') id: string, @Param('docId') docId: string, @CurrentUser() user: AuthUser, @ReqCtx() ctx: RequestContext) {
     const d = await this.farmers.documentFile(user, id, docId, ctx);
-    return new StreamableFile(fs.createReadStream(d.path), { type: d.mimeType });
+    return new StreamableFile(d.stream, { type: d.mimeType, length: d.sizeBytes });
   }
 }

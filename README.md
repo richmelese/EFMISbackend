@@ -12,7 +12,7 @@ The architecture and coding conventions are in [ARCHITECTURE.md](ARCHITECTURE.md
 cd EFMISbackend
 npm install
 cp .env.example .env
-docker compose up -d postgres redis   # PostgreSQL 16 on :55433 (dbs efmis, efmis_test) + Redis 7 on :56379
+docker compose up -d postgres redis minio   # PostgreSQL 16 on :55433 (dbs efmis, efmis_test), Redis 7 on :56379, MinIO on :59010 (console :59011)
 npm run start:dev      # http://localhost:4000/api   — migrations + seed run automatically on first start
 ```
 

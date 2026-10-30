@@ -6,6 +6,7 @@ import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/main';
 import { SeedService } from '../src/database/seeds/seed.service';
+import { StorageService } from '../src/modules/storage/storage.service';
 
 describe('RBAC: users, roles and permissions (e2e)', () => {
   let app: NestExpressApplication;
@@ -24,6 +25,7 @@ describe('RBAC: users, roles and permissions (e2e)', () => {
     await app.init();
     http = app.getHttpServer();
     const seeder = app.get(SeedService);
+    await app.get(StorageService).emptyTestBuckets();
     await seeder.reset();
     await seeder.seed();
     t.ADMIN = (await api('post', '/auth/demo-login').send({ role: 'ADMIN' })).body.token;

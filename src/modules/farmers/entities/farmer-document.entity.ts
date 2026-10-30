@@ -10,7 +10,8 @@ export class FarmerDocument {
   @Column({ type: 'varchar', length: 60 }) mimeType: string;
   @Column({ type: 'int' }) sizeBytes: number;
   @Index({ unique: true }) @Column({ type: 'varchar', length: 64 }) sha256: string;
-  @Column({ type: 'text' }) storagePath: string;
+  /** Object key in the MinIO bucket efmis-farmer-documents: <farmerId>/<documentId>.<ext> */
+  @Column({ type: 'text' }) storageKey: string;
   @Column({ type: 'boolean', default: false }) consentGiven: boolean;
   @Column({ type: 'varchar', length: 40, nullable: true }) uploadedBy: string | null;
   @CreateDateColumn({ type: 'timestamptz' }) createdAt: Date;

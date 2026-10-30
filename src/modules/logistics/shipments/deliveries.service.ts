@@ -2,7 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { randomUUID } from 'crypto';
-import * as fs from 'fs';
 import * as path from 'path';
 import { DataSource } from 'typeorm';
 import { RULES } from '../../../common/constants/rules';
@@ -11,6 +10,8 @@ import { Errors } from '../../../common/utils/errors';
 import { sha256 } from '../../../common/utils/helpers';
 import { AlertsService } from '../../alerts/alerts.service';
 import { AuditService } from '../../audit/audit.service';
+import { StorageService } from '../../storage/storage.service';
+import { objectKey, retentionUntil, StoredObject } from '../../storage/storage.types';
 import { RealtimeService } from '../realtime/realtime.service';
 import { InventoryService } from '../warehouses/inventory.service';
 import { ConfirmDeliveryDto } from './dto/shipment.dto';
@@ -18,7 +19,6 @@ import { Delivery, Shipment, Trip, TripEvent, TripShipment } from './entities/sh
 import { ShipmentChange, ShipmentsService, deliveryToFrontend } from './shipments.service';
 import { PROOF_MIME_EXT, QTY_EPS, UploadedProof, iso, isWarehouseOperator, r3, uniqueViolation } from './shipments.util';
 
-const PROOF_AREA = 'proof-of-delivery';
 const DAMAGE_CONDITIONS = ['DAMAGED', 'PARTIAL_DAMAGE', 'WET'];
 
 /**
@@ -34,12 +34,9 @@ export class DeliveriesService {
     private readonly alerts: AlertsService,
     private readonly realtime: RealtimeService,
     private readonly shipments: ShipmentsService,
-    private readonly inventory: InventoryService
+    private readonly inventory: InventoryService,
+    private readonly storage: StorageService
   ) {}
-
-  private storageRoot(): string {
-    return path.resolve(this.config.get<string>('logistics.proofStorageDir') || path.resolve(process.cwd(), 'storage/private'));
-  }
 
   private assertDestinationOperator(user: AuthUser, s: Shipment) {
     if (isWarehouseOperator(user) && (!user.warehouseId || user.warehouseId !== s.destinationWarehouseId)) {
@@ -69,10 +66,10 @@ export class DeliveriesService {
     const received = r3(dto.receivedQuantity);
     if (!(received >= 0)) throw Errors.unprocessable('receivedQuantity must be ≥ 0');
 
-    // ---- proof file (validated + written before the transaction; removed again on failure)
+    // ---- proof file (validated + stored before the transaction; removed again on failure)
     let storageKey: string | null = null;
     let proofHash: string | null = null;
-    let absPath: string | null = null;
+    let stored: StoredObject | null = null;
     if (file) {
       if (!RULES.uploadMimeTypes.includes(file.mimetype)) throw Errors.unprocessable('Proof of delivery must be a JPEG, PNG or PDF file');
       const max = this.config.get<number>('maxUploadBytes') ?? 5 * 1024 * 1024;
@@ -80,12 +77,8 @@ export class DeliveriesService {
       proofHash = sha256(file.buffer.toString('base64'));
       const dup = await this.ds.getRepository(Delivery).findOne({ where: { proofSha256: proofHash }, select: ['id', 'shipmentId'] });
       if (dup) throw Errors.conflict('Duplicate proof of delivery (identical file already attached to another delivery)', { deliveryId: dup.id, shipmentId: dup.shipmentId });
-      const name = randomUUID() + PROOF_MIME_EXT[file.mimetype];
-      storageKey = `${PROOF_AREA}/${name}`;
-      const dir = path.join(this.storageRoot(), PROOF_AREA);
-      await fs.promises.mkdir(dir, { recursive: true });
-      absPath = path.join(dir, name);
-      await fs.promises.writeFile(absPath, file.buffer, { mode: 0o600 });
+      stored = await this.storage.put('DELIVERY_PROOFS', objectKey(shipmentId, randomUUID() + PROOF_MIME_EXT[file.mimetype]), file.buffer, { mimeType: file.mimetype, sha256: proofHash });
+      storageKey = stored.key;
     }
 
     let change: ShipmentChange | null = null;
@@ -184,10 +177,12 @@ export class DeliveriesService {
           deliveryId: d.id, tripId: trip.id, receivedQuantity: received, loadedQuantity: loaded, discrepancy, condition: dto.condition,
           final: isFinal, proofSha256: proofHash, idempotencyKey: key
         }, ctx, m);
+        if (stored) await this.storage.scheduleRetention(m, stored, retentionUntil('DELIVERY_PROOFS', new Date()));
         return d;
       });
+      if (stored) this.storage.applyPendingRetentionSoon();
     } catch (e) {
-      if (absPath) await fs.promises.unlink(absPath).catch(() => undefined);
+      if (stored) await this.storage.remove(stored);
       if (key && uniqueViolation(e)) {
         const existing = await this.ds.getRepository(Delivery).findOne({ where: { idempotencyKey: key } });
         if (existing) return this.replay(existing, shipmentId);
@@ -218,14 +213,11 @@ export class DeliveriesService {
     const s = await this.shipments.getRow(d.shipmentId);
     this.assertDestinationOperator(user, s);
     if (!d.proofOfDeliveryStorageKey) throw Errors.notFound('Proof of delivery');
-    const root = this.storageRoot();
-    const file = path.resolve(root, d.proofOfDeliveryStorageKey);
-    if (!file.startsWith(root + path.sep)) throw Errors.notFound('Proof of delivery');
-    if (!fs.existsSync(file)) throw Errors.notFound('Proof of delivery file');
+    const obj = await this.storage.get('DELIVERY_PROOFS', d.proofOfDeliveryStorageKey);
     await this.audit.record(user, 'DELIVERY_PROOF_ACCESSED', d.id, {
       shipmentId: d.shipmentId, shipmentNumber: s.shipmentNumber, proofSha256: d.proofSha256, accessedAt: iso(new Date())
     }, ctx);
-    const ext = path.extname(file);
-    return { path: file, mimeType: d.proofMimeType || 'application/octet-stream', fileName: `POD-${s.shipmentNumber}-${d.id.slice(0, 8)}${ext}` };
+    const ext = path.extname(d.proofOfDeliveryStorageKey);
+    return { stream: obj.stream, sizeBytes: obj.sizeBytes, mimeType: d.proofMimeType || 'application/octet-stream', fileName: `POD-${s.shipmentNumber}-${d.id.slice(0, 8)}${ext}` };
   }
 }

@@ -7,6 +7,7 @@ import request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/main';
 import { DEMO_PASSWORD, SeedService } from '../../src/database/seeds/seed.service';
+import { StorageService } from '../../src/modules/storage/storage.service';
 
 type Method = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
@@ -38,7 +39,7 @@ export interface TestApi {
   close: () => Promise<void>;
 }
 
-/** Boots the app, resets and seeds efmis_test (unless `seed: false`). */
+/** Boots the app, resets and seeds efmis_test and empties the efmis-test-* MinIO buckets (unless `seed: false`). */
 export async function startTestApi({ listen = false, seed = true }: { listen?: boolean; seed?: boolean } = {}): Promise<TestApi> {
   const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
   const app = configureApp(mod.createNestApplication<NestExpressApplication>());
@@ -48,6 +49,7 @@ export async function startTestApi({ listen = false, seed = true }: { listen?: b
   const baseUrl = listen ? `http://127.0.0.1:${(http.address() as AddressInfo).port}` : undefined;
   if (seed) {
     const seeder = app.get(SeedService);
+    await app.get(StorageService).emptyTestBuckets(); // test buckets only (efmis-test-*), never dev data
     await seeder.reset();
     await seeder.seed();
   }

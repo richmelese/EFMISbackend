@@ -1,6 +1,4 @@
 // e2e environment: dedicated test database (created by docker/init-test-db.sql), no scheduler, demo mode on.
-import * as os from 'os';
-import * as path from 'path';
 
 process.env.NODE_ENV = 'test';
 process.env.DB_HOST = process.env.TEST_DB_HOST || process.env.DB_HOST || 'localhost';
@@ -14,8 +12,15 @@ process.env.SCHEDULER_ENABLED = 'false';
 process.env.DEMO_MODE = 'true';
 process.env.JWT_SECRET = 'efmis-e2e-secret';
 process.env.SIGNATURE_SECRET = 'efmis-e2e-signature-secret';
-process.env.UPLOAD_DIR = path.join(os.tmpdir(), 'efmis-e2e-uploads');
 process.env.REDIS_URL = ''; // inline jobs + in-memory hot state: deterministic tests
 process.env.TRACCAR_URL = ''; // never poll a real GPS platform from tests
 process.env.TRACCAR_WEBHOOK_SECRET = 'e2e-traccar-secret';
-process.env.PROOF_STORAGE_DIR = path.join(os.tmpdir(), 'efmis-e2e-private');
+// File storage: the same MinIO as development, but separate test buckets (emptied by startTestApi)
+process.env.MINIO_ENDPOINT = process.env.TEST_MINIO_ENDPOINT || process.env.MINIO_ENDPOINT || 'localhost';
+process.env.MINIO_PORT = process.env.TEST_MINIO_PORT || process.env.MINIO_PORT || '59010';
+process.env.MINIO_ACCESS_KEY = process.env.MINIO_ACCESS_KEY || 'efmis-minio';
+process.env.MINIO_SECRET_KEY = process.env.MINIO_SECRET_KEY || 'efmis_minio_dev_password';
+process.env.MINIO_BUCKET_FARMER_DOCUMENTS = 'efmis-test-farmer-documents';
+process.env.MINIO_BUCKET_DRIVER_DOCUMENTS = 'efmis-test-driver-documents';
+process.env.MINIO_BUCKET_DELIVERY_PROOFS = 'efmis-test-delivery-proofs';
+process.env.MINIO_OBJECT_LOCK = 'true';

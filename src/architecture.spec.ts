@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const MODULES = path.join(__dirname, 'modules');
-const PLATFORM = ['auth', 'users', 'settings', 'audit', 'signatures', 'comments', 'alerts', 'notifications', 'admin-units', 'seasons', 'workflow', 'outbox', 'external', 'scheduler'];
+const PLATFORM = ['auth', 'users', 'settings', 'audit', 'signatures', 'comments', 'alerts', 'notifications', 'admin-units', 'seasons', 'workflow', 'outbox', 'storage', 'external', 'scheduler'];
 const DOMAIN = ['farmers', 'reviews', 'regional', 'aggregation', 'national', 'quota', 'integrations', 'reports', 'dashboard', 'ussd', 'logistics'];
 
 /**
@@ -32,6 +32,14 @@ describe('architecture', () => {
     for (const retired of ['kebele-review', 'approvals', 'hierarchy']) expect(present).not.toContain(retired);
     for (const m of [...PLATFORM, ...DOMAIN]) expect(present).toContain(m);
     expect(present.filter(m => !PLATFORM.includes(m) && !DOMAIN.includes(m))).toEqual([]);
+  });
+
+  it('uploaded files never touch the local filesystem: no module imports fs (MinIO via StorageService only)', () => {
+    const offenders = [...PLATFORM, ...DOMAIN]
+      .flatMap(mod => tsFiles(path.join(MODULES, mod)))
+      .filter(f => /from '(node:)?fs(\/promises)?'|require\('(node:)?fs'\)/.test(fs.readFileSync(f, 'utf8')))
+      .map(f => path.relative(MODULES, f));
+    expect(offenders).toEqual([]);
   });
 
   it('platform modules never import domain modules (rule 2), apart from the listed debt', () => {

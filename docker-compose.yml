@@ -36,6 +36,27 @@ services:
       timeout: 3s
       retries: 10
 
+  # File storage (farmer documents, driver documents, delivery proofs). The API creates its buckets on start.
+  # 59010/59011: 9000/9001 and 59000 are taken by other projects on this machine.
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    container_name: efmis-minio
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: efmis-minio
+      MINIO_ROOT_PASSWORD: efmis_minio_dev_password
+    ports:
+      - "59010:9000"
+      - "59011:9001"
+    volumes:
+      - efmis_miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   
   traccar:
     image: traccar/traccar:6.6
@@ -93,4 +114,5 @@ services:
 volumes:
   efmis_pgdata:
   efmis_redisdata:
+  efmis_miniodata:
   efmis_traccar_logs:

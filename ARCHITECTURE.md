@@ -92,6 +92,7 @@ Each domain module: `<name>.module.ts`, `<name>.controller.ts` (thin: routing, D
 | AdminUnitsService | `byId`, `findById`, `unitRef(id)` (path + legacy chain), `ancestors`, `children`, `subtree`, `tree(user)`, `pathOf(id)` |
 | WorkflowRegistry | `register(definition)`, `get(name)` |
 | WorkflowService | `open(definition, { id }, unitId, seasonId, m?)`, `act(user, caseId, action, { pin, comments, details, expectedVersion }, ctx, m?)`, `available(user, case)`, `history(entityType, entityId)`, `processDeadlines()` |
+| StorageService | `put(bucket, key, buffer, { mimeType, sha256 })`, `get(bucket, key)` (stream), `remove(stored)` (rollback), `scheduleRetention(m, stored, until)`; keys via `objectKey(...)` |
 | OutboxService | `enqueue({ channel, payload, dedupeKey?, ackWithinHours?, maxAttempts? }, m)`, `ack(id)`, `registerAdapter(adapter)`, `drain()` |
 | AuditService | `record(actor, action, target, details?, ctx?, manager?)`, `list(q)`, `verifyChain()` |
 | SignaturesService | `sign(user, cred, targetType, targetId, payload, manager?)`, `verify(id, payload?)`, `findById(id)` |
@@ -121,6 +122,13 @@ Each domain module: `<name>.module.ts`, `<name>.controller.ts` (thin: routing, D
   `WorkflowAdvanced` and notifies the roles that act next — in one transaction. The hourly scheduler escalates overdue
   cases up the unit chain (or sends daily reminders). `history()` merges legacy `approval_actions`. Next actors are
   notified on the definition's `notifyChannels` (default IN_APP + EMAIL; EMAIL/SMS/PUSH go through the outbox).
+- **storage** — every uploaded file is in **MinIO** (no local filesystem anywhere): one private, versioned,
+  object-locked bucket per kind of file (`efmis-farmer-documents`, `efmis-driver-documents`, `efmis-delivery-proofs`).
+  Upload = check type and hash → `put` → save the row in a transaction (with `scheduleRetention`) → on failure
+  `remove` the exact version. Write-once GOVERNANCE retention is applied after the commit (farmer documents and
+  delivery proofs 7 years, driver documents expiry + 2 years) and retried by the scheduler. Downloads stream through
+  the API (scope check + audit), never presigned. The API refuses to start without MinIO. Old local files:
+  `npm run storage:import-local`. See MINIO_STORAGE_PLAN.md.
 - **outbox** — `outbox_messages` (PENDING → SENT/ACKED, FAILED with exponential back-off, DEAD after maxAttempts).
   The relay polls every `OUTBOX_POLL_MS` (5000; 0 = off; off in tests, which call `drain()`): with `REDIS_URL` it hands
   messages to a BullMQ worker (queue `outbox`), without it delivers inline. EMAIL/SMS/PUSH use logging stub adapters

@@ -11,8 +11,7 @@ ENV NODE_ENV=production
 COPY package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
-# Private storage for proof-of-delivery / driver documents and uploads (mount volumes here)
-RUN mkdir -p /app/storage/private /app/uploads && chown -R node:node /app/storage /app/uploads
+# Uploaded files live in MinIO (MINIO_* environment variables); the container keeps no local file storage.
 USER node
 EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \

@@ -6,6 +6,7 @@ import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/main';
 import { SeedService } from '../src/database/seeds/seed.service';
 import { InventoryService } from '../src/modules/logistics/warehouses/inventory.service';
+import { StorageService } from '../src/modules/storage/storage.service';
 
 describe('Lots, QC, custody chain and security incidents (e2e)', () => {
   let app: NestExpressApplication;
@@ -25,6 +26,7 @@ describe('Lots, QC, custody chain and security incidents (e2e)', () => {
     await app.init();
     http = app.getHttpServer();
     const seeder = app.get(SeedService);
+    await app.get(StorageService).emptyTestBuckets();
     await seeder.reset();
     await seeder.seed();
     for (const role of ['LOGISTICS_MANAGER', 'DISPATCHER', 'WAREHOUSE_OPERATOR', 'ECAE', 'DRIVER']) {
