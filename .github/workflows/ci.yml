@@ -1,0 +1,41 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: efmis
+          POSTGRES_PASSWORD: efmis_dev_password
+          POSTGRES_DB: efmis_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U efmis -d efmis_test"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      TEST_DB_HOST: localhost
+      TEST_DB_PORT: '5432'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      # build also exports openapi.json: the committed API contract must match the code
+      - run: npm run build
+      - name: API contract is up to date
+        run: git diff --exit-code openapi.json || (echo "::error::openapi.json is stale - run npm run build and commit it" && exit 1)
+      # ratchet: lower the number as each roadmap phase documents its area; it may never go up
+      - run: npm run openapi:check -- --max=205
+      - run: npm run test:e2e

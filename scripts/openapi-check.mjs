@@ -28,3 +28,9 @@ for (const [path, ops] of Object.entries(spec.paths)) {
 console.log(`OpenAPI: ${total - undocumented}/${total} operations document their success response (${undocumented} undocumented)`);
 for (const [tag, n] of [...byTag].sort((a, b) => b[1] - a[1])) console.log(`  ${String(n).padStart(3)}  ${tag}`);
 if (process.argv.includes('--list')) console.log('\n' + list.join('\n'));
+// Ratchet: --max=N fails when more responses are undocumented than the baseline (new routes must be documented).
+const max = process.argv.find(a => a.startsWith('--max='));
+if (max && undocumented > Number(max.slice(6))) {
+  console.error(`Undocumented responses went up: ${undocumented} > ${max.slice(6)}. Add @ApiOkResponse({ type }) to new routes.`);
+  process.exit(1);
+}
