@@ -4,7 +4,7 @@ import * as path from 'path';
 
 process.env.NODE_ENV = 'test';
 process.env.DB_HOST = process.env.TEST_DB_HOST || process.env.DB_HOST || 'localhost';
-process.env.DB_PORT = process.env.TEST_DB_PORT || process.env.DB_PORT || '55432';
+process.env.DB_PORT = process.env.TEST_DB_PORT || process.env.DB_PORT || '55433';
 process.env.DB_USERNAME = process.env.DB_USERNAME || 'efmis';
 process.env.DB_PASSWORD = process.env.DB_PASSWORD || 'efmis_dev_password';
 process.env.DB_NAME = process.env.TEST_DB_NAME || 'efmis_test';

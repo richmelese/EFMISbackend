@@ -33,7 +33,7 @@ export default (): AppConfig => {
     corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:3000').split(',').map(s => s.trim()).filter(Boolean),
     db: {
       host: process.env.DB_HOST || 'localhost',
-      port: num(process.env.DB_PORT, 55432),
+      port: num(process.env.DB_PORT, 55433),
       username: process.env.DB_USERNAME || 'efmis',
       password: process.env.DB_PASSWORD || 'efmis_dev_password',
       database: process.env.DB_NAME || 'efmis',
